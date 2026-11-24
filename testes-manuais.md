@@ -1,10 +1,17 @@
 # Testes manuais — Chronicles & Sheet
 
-Roteiro para conferir no navegador as correções feitas no `script.js`. Leva uns 15 minutos.
+Roteiro para conferir no navegador as correções e os recursos novos. As seções A a D levam uns 15 minutos; E a G, mais uns 15.
+
+| Seções | O que testa | Como abrir |
+|---|---|---|
+| A–D | Correções do `script.js`, backups e armazenamento | `index.html` direto no navegador |
+| E | Uso no celular | DevTools no modo dispositivo |
+| F | Instalação, offline e tela acesa | Servidor local (`http://`) ou GitHub Pages, e um celular de verdade |
+| G | Rolagem por expressão | `index.html` direto no navegador |
 
 ## Preparação
 
-1. Abra o `index.html` direto no navegador (Chrome, Edge ou Firefox).
+1. Abra o `index.html` direto no navegador (Chrome, Edge ou Firefox). Para a seção F, veja a preparação dela.
 2. Abra o DevTools (F12) na aba **Console** e deixe aberto o tempo todo. Não deve aparecer nenhum erro vermelho, **exceto** a linha `Erro ao importar backup: ...` nos testes de arquivo inválido (seção B), que é esperada.
 3. Para começar do zero: DevTools → **Application** → Local Storage → apague a chave `chronicles-sheet-state-v1` e recarregue. Deve aparecer o personagem de exemplo, Aelric Vale.
 
@@ -55,3 +62,58 @@ Os arquivos de backup estão em [exemplos-backup/](exemplos-backup/). Para impor
 | D4 | Ainda nesse modo: desenhar um retrato numa relação → Salvar desenho | O editor fecha e o retrato aparece na tabela |
 | D5 | Importar `2-valido-atual.json` | "Backup importado com sucesso!" e o Local Storage volta a ter os dados (o import resolve o modo só memória) |
 | D6 | Abrir o site em duas abas → mudar o nome na aba 1 → olhar a aba 2 | A aba 2 mostra "Os dados foram alterados em outra aba. Recarregue a página..." |
+
+## E. Uso no celular
+
+No DevTools, ligue o **modo dispositivo** (Ctrl+Shift+M) e escolha um celular, ex.: iPhone 12 Pro (390px). Para testar 360px, use "Dimensions: Responsive" com largura 360. Recarregue a página depois de trocar o aparelho.
+
+| # | Passo | Resultado esperado |
+|---|---|---|
+| E1 | Tema Ficha → rolar até **Perícias** e **Arsenal** | Cada linha é um cartão legível ("Perícia: Acrobacia"…), sem uma letra por linha, e sem rolagem lateral na página |
+| E2 | Inspecionar um botão **Remover** de uma perícia | Altura de pelo menos 44px; o 🗑 do diário (tema Diário) tem 44×44 |
+| E3 | Tocar em **+1** do HP | O botão não fica "levantado" depois do toque |
+| E4 | **Adicionar perícia** | Aparecem caixas Força, Intelecto, Presença…; a dica não fala em "Ctrl/Cmd" |
+| E5 | Marcar duas caixas e salvar a perícia | A tabela mostra os dois atributos (ex.: "Força / Vigor") |
+| E6 | **Editar** essa perícia | As mesmas caixas já vêm marcadas |
+| E7 | Rolar até o fim da página e adicionar um item ao inventário | "Item adicionado ao inventário." aparece colada na base da tela |
+| E8 | Escolher um iPhone com notch e girar para paisagem | O conteúdo não fica embaixo do recorte |
+| E9 | Tema Diário → lápis de uma relação | O editor de pixel art cabe inteiro na tela |
+| E10 | Desligar o modo dispositivo (desktop) | A página está igual à de antes: select múltiplo nas perícias, dica com "Ctrl/Cmd", mensagens no topo |
+
+O teclado certo (numérico no PV, "Buscar" na busca do diário, "OK" nos campos) só dá para conferir num celular de verdade.
+
+## F. Instalação, offline e tela acesa
+
+**Preparação:** o modo offline não funciona abrindo o arquivo direto. Na pasta do projeto, rode `python -m http.server 8000` (ou use o Live Server do VS Code) e abra `http://localhost:8000`. Os passos F7 a F10 são no celular, com o site do GitHub Pages.
+
+| # | Passo | Resultado esperado |
+|---|---|---|
+| F1 | DevTools → **Application** → **Manifest** | Nome "Chronicles & Sheet", ícones do d20 e nenhum erro de instalação |
+| F2 | Recarregar a página uma vez → Application → **Service workers** | `sw.js` aparece como "activated and is running" |
+| F3 | Application → **Cache storage** → `chronicles-sheet-v1` | 9 arquivos: a página, `index.html`, `styles.css`, `script.js`, o manifest e os 4 ícones |
+| F4 | Mudar o nome do personagem → **Network** → marcar **Offline** → recarregar | A página abre com o visual completo e o nome novo |
+| F5 | Desmarcar Offline → mudar um texto no `index.html` → recarregar **uma vez** | A mudança já aparece (não fica presa na versão antiga) |
+| F6 | Inspecionar `<meta name="theme-color">` → trocar o tema | O valor muda de `#0f172a` (Ficha) para `#2c1f13` (Diário) |
+| F7 | Android/Chrome: menu → "Instalar app". iPhone/Safari: Compartilhar → "Adicionar à Tela de Início" | O ícone do d20 aparece na tela inicial e abre sem a barra de endereço |
+| F8 | Com o app instalado aberto uma vez, ligar o **modo avião** e abrir pelo ícone | O site abre com os dados |
+| F9 | Colocar o bloqueio automático da tela em 30 s → tocar em **Manter tela acesa** → esperar 1 minuto | O botão mostra "Tela acesa: ligada" e a tela não apaga |
+| F10 | Trocar de app e voltar | A tela continua acesa sem tocar no botão de novo |
+
+No iPhone, o app da tela inicial **não vê** os dados do Safari: exporte o backup no Safari e importe no app. Num navegador sem suporte a tela acesa, o botão simplesmente não aparece.
+
+## G. Rolagem por expressão (tema Ficha → Rolador de Dados)
+
+| # | Passo | Resultado esperado |
+|---|---|---|
+| G1 | **Limpar histórico** → tocar em **d20** | Histórico com "d20" e um número de 1 a 20, como antes |
+| G2 | Tocar em **Vantagem** → **d20** | Linha "2d20kh1" com o detalhe "Vantagem: [x, (y)]" (o descartado entre parênteses); o modo volta para **Normal** |
+| G3 | **Desvantagem** → digitar `d20+5` → **Rolar** | Linha "2d20kl1+5" com "Desvantagem: [...] + 5"; o total é o menor dado + 5 |
+| G4 | Digitar `2d6 + 3` → apertar Enter | Linha "2d6+3", detalhe "[x, y] + 3"; a expressão continua no campo |
+| G5 | Digitar `4d6kh3` → Rolar | Quatro dados no detalhe, um entre parênteses; o total soma os 3 maiores |
+| G6 | Digitar `d20-30` → Rolar | Total negativo aparece normalmente; "Última rolagem" mostra "d20-30 = …" |
+| G7 | Digitar `banana` → Rolar | Mensagem vermelha "Não entendi a expressão "banana"…" e o histórico não muda |
+| G8 | Digitar `d20 5` → Rolar | Mesma mensagem de erro (não vira d205) |
+| G9 | Digitar `101d6` → Rolar | "Role no máximo 100 dados de uma vez." |
+| G10 | **Vantagem** → digitar `2d6` → Rolar | "Vantagem e desvantagem valem para expressões com um dado único, como d20+5." e o modo continua em Vantagem |
+| G11 | **Exportar Backup** → Limpar histórico → importar o arquivo | As rolagens voltam com expressão e detalhe |
+| G12 | Recarregar a página | O histórico continua igual |
