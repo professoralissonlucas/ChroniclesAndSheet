@@ -385,6 +385,7 @@ function init() {
   bindJournalForm();
   bindThemeToggle();
   bindBackupActions();
+  bindStorageSync();
   renderAll();
 }
 
@@ -411,8 +412,9 @@ function normalizeState(raw) {
   // O atual fica sempre entre 0 e o máximo.
   ['hp', 'sanity', 'effort'].forEach((key) => {
     const stat = isPlainObject(merged.character[key]) ? merged.character[key] : safe.character[key];
-    const max = clampNumber(stat.max, 1, Infinity, safe.character[key].max);
-    const current = clampNumber(stat.current, 0, max, max);
+    // Barras usam só inteiros: decimais antigos são arredondados.
+    const max = arredondarOuNulo(clampNumber(stat.max, 1, Infinity, safe.character[key].max));
+    const current = arredondarOuNulo(clampNumber(stat.current, 0, max, max));
     merged.character[key] = { ...stat, current, max };
   });
 
@@ -424,7 +426,7 @@ function normalizeState(raw) {
       merged.character[key] = '';
     }
   });
-  merged.character.level = clampNumber(merged.character.level, 1, 99, 1);
+  merged.character.level = arredondarOuNulo(clampNumber(merged.character.level, 1, 99, 1));
 
   if (!Array.isArray(merged.inventory)) merged.inventory = safe.inventory;
   if (!Array.isArray(merged.arsenal)) merged.arsenal = safe.arsenal;
@@ -721,7 +723,7 @@ function normalizeInventoryItem(item, usedIds) {
     ...item,
     id: normalizeId(item.id, usedIds),
     name,
-    quantity: clampNumber(item.quantity, 1, Infinity, 1),
+    quantity: arredondarOuNulo(clampNumber(item.quantity, 1, Infinity, 1)),
     description: typeof item.description === 'string' ? item.description : '',
   };
 }
@@ -798,9 +800,14 @@ function normalizeJournalEntry(entry, usedIds) {
     emotionIntensity: entry.emotionIntensity === null || entry.emotionIntensity === '' ||
       entry.emotionIntensity === undefined
       ? null
-      : clampNumber(entry.emotionIntensity, 1, 5, null),
+      // Arredonda para o medidor (5 bolinhas) bater com o texto "N/5".
+      : arredondarOuNulo(clampNumber(entry.emotionIntensity, 1, 5, null)),
     reflection: normalizedReflection,
   };
+}
+
+function arredondarOuNulo(value) {
+  return value === null ? null : Math.round(value);
 }
 
 function normalizeRelationshipItem(entry, usedIds) {
@@ -867,12 +874,25 @@ function deepMerge(base, incoming) {
 
 // Se o armazenamento estiver bloqueado ou cheio, o site continua funcionando só em memória.
 function warnStorageUnavailable(error) {
-  if (storageWarningShown) return;
+  if (storageWarningShown) {
+    avisarDadosNaoSalvos();
+    return;
+  }
   storageWarningShown = true;
   console.warn(
     'Não foi possível usar o armazenamento do navegador. Os dados não serão salvos ao fechar a página. Use "Exportar Backup" para guardar uma cópia.',
     error
   );
+  showAppMessage(
+    'Não foi possível salvar neste navegador. Seus dados continuam disponíveis nesta sessão; exporte um backup para guardá-los.',
+    'warning'
+  );
+}
+
+// Repete o aviso a cada gravação que falha, quando a mensagem anterior já sumiu,
+// para a pessoa não achar que as alterações estão sendo salvas.
+function avisarDadosNaoSalvos() {
+  if (!appStatus.hidden) return;
   showAppMessage(
     'Não foi possível salvar neste navegador. Seus dados continuam disponíveis nesta sessão; exporte um backup para guardá-los.',
     'warning'
@@ -893,7 +913,10 @@ function showAppMessage(message, type = 'success') {
 }
 
 function saveState(stateToSave = state, force = false) {
-  if (!storageWriteEnabled && !force) return false;
+  if (!storageWriteEnabled && !force) {
+    avisarDadosNaoSalvos();
+    return false;
+  }
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
@@ -944,7 +967,7 @@ function bindCharacterInputs() {
       const value = event.target.value;
       if (key === 'level') {
         // Enquanto digita, só salva números válidos; o campo é corrigido no change.
-        const level = clampNumber(value, 1, 99, null);
+        const level = arredondarOuNulo(clampNumber(value, 1, 99, null));
         if (level === null) return;
         state.character.level = level;
       } else if (key === 'name' || key === 'className' || key === 'notes') {
@@ -956,7 +979,7 @@ function bindCharacterInputs() {
 
   // Ao sair do campo (ou apertar Enter), o nível fica entre 1 e 99.
   characterFields.level.addEventListener('change', () => {
-    state.character.level = clampNumber(characterFields.level.value, 1, 99, 1);
+    state.character.level = arredondarOuNulo(clampNumber(characterFields.level.value, 1, 99, 1));
     saveState();
     renderCharacterBlock();
   });
@@ -1100,7 +1123,7 @@ function bindVitalCurrentInputs() {
 
   configs.forEach(({ key, element, render }) => {
     element.addEventListener('input', () => {
-      const current = normalizeFiniteNumber(element.value, null);
+      const current = arredondarOuNulo(normalizeFiniteNumber(element.value, null));
       if (current === null) return;
 
       const stat = state.character[key];
@@ -1111,7 +1134,7 @@ function bindVitalCurrentInputs() {
 
     element.addEventListener('change', () => {
       const stat = state.character[key];
-      const current = normalizeFiniteNumber(element.value, stat.current);
+      const current = Math.round(normalizeFiniteNumber(element.value, stat.current));
       stat.current = Math.min(stat.max, Math.max(0, current));
       saveState();
       render();
@@ -1134,7 +1157,7 @@ function bindVitalMaxInputs() {
     };
 
     element.addEventListener('input', () => {
-      const nextMax = normalizeFiniteNumber(element.value, null);
+      const nextMax = arredondarOuNulo(normalizeFiniteNumber(element.value, null));
       if (nextMax === null) return;
       renderVitalPreview(key, Math.max(0, nextMax));
     });
@@ -1143,7 +1166,7 @@ function bindVitalMaxInputs() {
     // Isso é feito só aqui para não perder o valor atual enquanto a pessoa digita.
     element.addEventListener('change', () => {
       const currentStat = getNestedValue(state, path) || { max: 1, current: 0 };
-      const typedMax = normalizeFiniteNumber(element.value, null);
+      const typedMax = arredondarOuNulo(normalizeFiniteNumber(element.value, null));
       const nextMax = typedMax !== null && typedMax > 0
         ? typedMax
         : Math.max(1, Number(currentStat.max) || 1);
@@ -1188,11 +1211,10 @@ function bindInventoryForm() {
     const item = {
       id: id || generateId(),
       name: itemNameInput.value.trim(),
-      quantity: Math.max(1, Number(itemQtyInput.value) || 1),
+      quantity: Math.max(1, Math.round(Number(itemQtyInput.value)) || 1),
+      // O campo fica oculto no Diário, mas guarda a descrição carregada ao editar.
+      description: itemDescriptionInput.value.trim(),
     };
-    if (document.body.dataset.theme === 'field') {
-      item.description = itemDescriptionInput.value.trim();
-    }
 
     if (!item.name) {
       showAppMessage('Informe o nome do item antes de salvar.', 'error');
@@ -1285,10 +1307,9 @@ function bindArsenalForm() {
       name,
       quantity,
       damage,
+      // O campo fica oculto no Diário, mas guarda a descrição carregada ao editar.
+      description: weaponDescriptionInput.value.trim(),
     };
-    if (document.body.dataset.theme === 'field') {
-      weapon.description = weaponDescriptionInput.value.trim();
-    }
     const editingIndex = id ? state.arsenal.findIndex((entry) => entry.id === id) : -1;
     if (id && editingIndex < 0) {
       showAppMessage('Esta arma não está mais disponível para edição.', 'error');
@@ -1327,7 +1348,7 @@ function bindArsenalList() {
       weaponNameInput.value = weapon.name;
       weaponQuantityInput.value = weapon.quantity;
       weaponDamageInput.value = weapon.damage;
-      weaponDescriptionInput.value = weapon.description;
+      weaponDescriptionInput.value = weapon.description || '';
       saveWeaponBtn.textContent = 'Salvar alterações';
       cancelWeaponEditBtn.classList.remove('hidden');
       weaponNameInput.focus();
@@ -1390,7 +1411,8 @@ function bindSkillForm() {
     }
 
     if (editingIndex >= 0) {
-      state.skills[editingIndex] = skill;
+      // Mantém campos que o formulário não mostra (ex.: duplicateRecords).
+      state.skills[editingIndex] = { ...state.skills[editingIndex], ...skill };
     } else {
       state.skills.unshift(skill);
     }
@@ -1948,7 +1970,10 @@ function savePixelArt() {
     height: pixelArtEditor.height,
     pixels: pixelArtEditor.pixels.slice(),
   };
-  if (!saveState()) {
+  const saved = saveState();
+  // Com o armazenamento desativado (dados só nesta sessão), tentar de novo não adianta:
+  // o retrato fica na sessão, como as outras alterações. Só a falha de gravação desfaz.
+  if (!saved && storageWriteEnabled) {
     if (previousPixelArt === undefined) delete relationship.pixelArt;
     else relationship.pixelArt = previousPixelArt;
     showAppMessage('Não foi possível salvar o desenho no navegador. O retrato anterior foi preservado; libere espaço e tente novamente.', 'error');
@@ -1959,7 +1984,7 @@ function savePixelArt() {
   pixelArtEditor.dirty = false;
   renderRelationships();
   pixelArtDialog.close();
-  showAppMessage('Retrato salvo na relação.');
+  if (saved) showAppMessage('Retrato salvo na relação.');
 }
 
 function requestPixelArtClose() {
@@ -2051,16 +2076,12 @@ function bindJournalForm() {
       if (typeof journalDeleteDialog.showModal === 'function') {
         journalDeleteDialog.showModal();
       } else if (window.confirm('Deseja realmente excluir este registro do Diário Psicológico? Esta ação não poderá ser desfeita.')) {
-        const journalRestante = state.journal.filter((item) => item.id !== entry.id);
-        const estadoParaSalvar = { ...state, journal: journalRestante };
-        const saved = saveState(estadoParaSalvar);
-        if (saved) {
-          state.journal = journalRestante;
-          renderJournal();
-          showAppMessage('Registro excluído do Diário Psicológico.');
-        } else {
-          showAppMessage('Não foi possível excluir o registro. Os dados não foram alterados.');
-        }
+        // Como nas outras listas, a exclusão vale na sessão mesmo se o navegador não salvar;
+        // nesse caso o saveState já mostra o aviso de dados não salvos.
+        state.journal = state.journal.filter((item) => item.id !== entry.id);
+        const saved = saveState();
+        renderJournal();
+        if (saved) showAppMessage('Registro excluído do Diário Psicológico.');
         journalEntryPendingDeleteId = null;
       }
       return;
@@ -2101,7 +2122,7 @@ function bindJournalForm() {
       reflection[key] = journalReflectionFields[key].value.trim();
     });
 
-    state.journal.unshift({
+    const novaEntrada = {
       id: generateId(),
       title,
       content,
@@ -2113,7 +2134,16 @@ function bindJournalForm() {
         ? Number(journalEmotionIntensityInput.value)
         : null,
       reflection,
-    });
+    };
+    state.journal.unshift(novaEntrada);
+
+    // Se a busca ou o filtro atual esconderiam a entrada nova, limpa os dois
+    // para ela aparecer na lista e não parecer que não foi salva.
+    const termoBusca = journalSearchInput.value.trim().toLowerCase();
+    if (!matchesJournalEntry(novaEntrada, termoBusca, journalTagFilter.value)) {
+      journalSearchInput.value = '';
+      journalTagFilter.value = 'all';
+    }
 
     journalForm.reset();
     journalEmotionOtherField.classList.add('hidden');
@@ -2140,21 +2170,14 @@ function bindJournalForm() {
       return;
     }
 
-    const journalRestante = state.journal.filter((entry) => entry.id !== journalEntryPendingDeleteId);
-    const estadoParaSalvar = { ...state, journal: journalRestante };
-    const saved = saveState(estadoParaSalvar);
-
-    if (saved) {
-      state.journal = journalRestante;
-      journalEntryPendingDeleteId = null;
-      journalDeleteDialog.close();
-      renderJournal();
-      showAppMessage('Registro excluído do Diário Psicológico.');
-    } else {
-      journalEntryPendingDeleteId = null;
-      journalDeleteDialog.close();
-      showAppMessage('Não foi possível excluir o registro. Os dados não foram alterados.');
-    }
+    // Como nas outras listas, a exclusão vale na sessão mesmo se o navegador não salvar;
+    // nesse caso o saveState já mostra o aviso de dados não salvos.
+    state.journal = state.journal.filter((entry) => entry.id !== journalEntryPendingDeleteId);
+    const saved = saveState();
+    journalEntryPendingDeleteId = null;
+    journalDeleteDialog.close();
+    renderJournal();
+    if (saved) showAppMessage('Registro excluído do Diário Psicológico.');
   });
 
   journalDeleteDialog.addEventListener('cancel', () => {
@@ -2177,6 +2200,18 @@ function bindBackupActions() {
   importInput.addEventListener('change', handleBackupImport);
 }
 
+// O evento "storage" só chega quando OUTRA aba grava a mesma chave.
+// Apenas avisa; não recarrega os dados à força para não perder o que está nesta aba.
+function bindStorageSync() {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== STORAGE_KEY) return;
+    showAppMessage(
+      'Os dados foram alterados em outra aba. Recarregue a página antes de continuar para não sobrescrever essas alterações.',
+      'warning'
+    );
+  });
+}
+
 function exportBackup() {
   let url = null;
   try {
@@ -2188,13 +2223,17 @@ function exportBackup() {
 
     link.href = url;
     link.download = `chronicles-sheet-backup-${stamp}.json`;
+    // Navegadores antigos só baixam se o link estiver no documento.
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     showAppMessage('Backup exportado com sucesso.');
   } catch (error) {
     console.error('Erro ao exportar backup:', error);
     showAppMessage('Não foi possível exportar o backup. Tente novamente.', 'error');
   } finally {
-    if (url) URL.revokeObjectURL(url);
+    // Revoga depois, para o download ter tempo de começar.
+    if (url) window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }
 
@@ -2222,6 +2261,7 @@ async function handleBackupImport(event) {
     clearArsenalForm();
     clearAttributeForm();
     clearSkillForm();
+    clearRelationshipForm();
     journalForm.reset();
     journalEmotionOtherField.classList.add('hidden');
     renderAll();
@@ -2495,7 +2535,8 @@ function renderAttributes() {
     const card = document.createElement('div');
     const safeName = escapeHtml(attribute.name);
     card.className = 'attribute';
-    card.dataset.attributeId = escapeHtml(attribute.id);
+    // dataset não interpreta HTML: o id vai sem escape para continuar igual ao do state.
+    card.dataset.attributeId = attribute.id;
     card.innerHTML = `
       <label class="attribute-name-field">
         <span class="sr-only">Nome do atributo</span>
@@ -2864,13 +2905,21 @@ function renderJournal() {
     matchesJournalEntry(entry, searchTerm, tagFilter)
   );
 
-  const allTags = Array.from(new Set(state.journal.flatMap((entry) => entry.tags))).sort();
+  // #combate e #Combate viram uma opção só; fica a primeira grafia encontrada.
+  const tagsPorChave = new Map();
+  state.journal.flatMap((entry) => entry.tags).forEach((tag) => {
+    if (!tagsPorChave.has(chaveTag(tag))) tagsPorChave.set(chaveTag(tag), tag);
+  });
+  const allTags = Array.from(tagsPorChave.values()).sort();
   const currentValue = journalTagFilter.value;
   journalTagFilter.innerHTML = '<option value="all">Todas</option>' +
     allTags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('');
 
-  if (currentValue && allTags.includes(currentValue)) {
-    journalTagFilter.value = currentValue;
+  const tagSelecionada = currentValue && currentValue !== 'all'
+    ? tagsPorChave.get(chaveTag(currentValue))
+    : undefined;
+  if (tagSelecionada) {
+    journalTagFilter.value = tagSelecionada;
   } else {
     journalTagFilter.value = 'all';
   }
@@ -2898,7 +2947,13 @@ function matchesJournalEntry(entry, searchTerm, tagFilter) {
     entry.emotionOther.toLowerCase().includes(searchTerm) ||
     reflectionText.includes(searchTerm);
 
-  return matchesSearch && (tagFilter === 'all' || entry.tags.includes(tagFilter));
+  return matchesSearch &&
+    (tagFilter === 'all' || entry.tags.some((tag) => chaveTag(tag) === chaveTag(tagFilter)));
+}
+
+// Chave usada para comparar tags sem diferenciar maiúsculas; a tag salva não muda.
+function chaveTag(tag) {
+  return tag.toLocaleLowerCase('pt-BR');
 }
 
 function renderJournalEntry(entry, entryIndex) {
@@ -3003,7 +3058,10 @@ function normalizeTags(rawValue) {
       return normalized.replace(/\s+/g, '');
     });
 
-  return Array.from(new Set(values)).slice(0, 6);
+  // Na mesma entrada, #combate e #Combate contam como uma tag só (fica a primeira grafia).
+  return values
+    .filter((tag, index) => values.findIndex((other) => chaveTag(other) === chaveTag(tag)) === index)
+    .slice(0, 6);
 }
 
 function formatDate(value) {

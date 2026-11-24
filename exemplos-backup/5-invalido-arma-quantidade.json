@@ -1,0 +1,13 @@
+{
+  "character": {
+    "name": "Arma inválida"
+  },
+  "arsenal": [
+    {
+      "id": "arma-x",
+      "name": "Arco",
+      "quantity": 0,
+      "damage": "1d8"
+    }
+  ]
+}

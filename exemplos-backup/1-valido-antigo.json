@@ -1,0 +1,54 @@
+{
+  "theme": "field",
+  "character": {
+    "name": "Mira Antiga",
+    "className": "Ladina",
+    "level": 4,
+    "notes": "Backup no formato da primeira versão.",
+    "hp": {
+      "current": 18,
+      "max": 22
+    },
+    "attributes": {
+      "forca": 11,
+      "destreza": 17,
+      "constituicao": 12,
+      "inteligencia": 14,
+      "sabedoria": 13,
+      "carisma": 15
+    }
+  },
+  "inventory": [
+    {
+      "id": "item-antigo-1",
+      "name": "Gazuas",
+      "quantity": 1,
+      "description": "Kit de ladra."
+    },
+    {
+      "id": "item-antigo-2",
+      "name": "Corda",
+      "quantity": 3,
+      "description": ""
+    }
+  ],
+  "diceHistory": [
+    {
+      "id": "rolagem-antiga-1",
+      "result": "d20 = 17",
+      "timestamp": "2025-03-10T19:30:00.000Z"
+    }
+  ],
+  "journal": [
+    {
+      "id": "diario-antigo-1",
+      "title": "Fuga do mercado",
+      "content": "Escapamos pelos telhados.",
+      "tags": [
+        "#Fuga",
+        "#Cidade"
+      ],
+      "timestamp": "2025-03-10T20:00:00.000Z"
+    }
+  ]
+}
