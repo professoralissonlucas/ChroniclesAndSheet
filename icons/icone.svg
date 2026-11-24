@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Ícone do app: d20 com as cores do tema Ficha de Campo. Fundo cheio (sem cantos)
+       porque Android e iPhone aplicam a própria máscara; o desenho fica na zona segura central. -->
+  <defs>
+    <radialGradient id="brilho" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="#0f172a" />
+  <rect width="512" height="512" fill="url(#brilho)" />
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="256,106 386,181 386,331 256,406 126,331 126,181" stroke="#8b5cf6" stroke-width="18" />
+    <polygon points="256,176 330,306 182,306" stroke="#22d3ee" stroke-width="14" />
+    <path d="M256 106 L256 176 M386 181 L330 306 M126 181 L182 306 M256 176 L386 181 M256 176 L126 181 M182 306 L256 406 M330 306 L256 406 M182 306 L126 331 M330 306 L386 331" stroke="#8b5cf6" stroke-width="10" stroke-opacity="0.75" />
+  </g>
+</svg>

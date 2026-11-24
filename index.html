@@ -2,12 +2,17 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Chronicles & Sheet</title>
     <meta
       name="description"
       content="Ficha de personagem, inventário, rolagens de dados e diário psicológico para RPG de mesa."
     />
+    <!-- Cor da barra do navegador: o script.js troca para a cor do tema escolhido. -->
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icone-180.png" />
+    <meta name="apple-mobile-web-app-title" content="Chronicles" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-theme="field">
@@ -22,6 +27,8 @@
           <button id="themeToggle" class="primary-btn" type="button" aria-label="Alternar tema">
             Modo Diário Manuscrito
           </button>
+          <!-- Só aparece em navegadores com Screen Wake Lock (o script.js tira o hidden). -->
+          <button id="wakeLockBtn" class="secondary-btn" type="button" aria-pressed="false" hidden>Manter tela acesa</button>
           <button id="exportBtn" class="secondary-btn" type="button">Exportar Backup</button>
           <label class="secondary-btn file-upload" for="importFile">
             Importar Backup
@@ -44,17 +51,17 @@
           <div class="character-grid">
             <label class="field character-name-field">
               <span>Nome</span>
-              <input id="charName" name="name" type="text" placeholder="Nome do aventureiro" />
+              <input id="charName" enterkeyhint="done" name="name" type="text" placeholder="Nome do aventureiro" />
             </label>
 
             <label class="field character-class-field">
               <span>Classe</span>
-              <input id="charClass" name="class" type="text" placeholder="Classe" />
+              <input id="charClass" enterkeyhint="done" name="class" type="text" placeholder="Classe" />
             </label>
 
             <label class="field compact character-level-field">
               <span><span class="field-only">Nível</span><span class="journal-only">Nível</span></span>
-              <input id="charLevel" name="level" type="number" min="1" max="99" value="1" />
+              <input id="charLevel" enterkeyhint="done" inputmode="numeric" name="level" type="number" min="1" max="99" value="1" />
             </label>
 
             <label class="field wide character-notes-field">
@@ -71,9 +78,9 @@
                 </div>
                 <div class="hp-readout">
                   <strong id="hpCurrentText" class="journal-current-value">0</strong>
-                  <input id="hpCurrentInput" class="stat-current-input" type="number" min="0" step="1" value="24" aria-label="Pontos de vida atuais" />
+                  <input id="hpCurrentInput" enterkeyhint="done" inputmode="numeric" class="stat-current-input" type="number" min="0" step="1" value="24" aria-label="Pontos de vida atuais" />
                   <span>/</span>
-                  <input id="hpMaxInput" class="stat-max-input" type="number" min="0" step="1" value="30" aria-label="Máximo de pontos de vida" />
+                  <input id="hpMaxInput" enterkeyhint="done" inputmode="numeric" class="stat-max-input" type="number" min="0" step="1" value="30" aria-label="Máximo de pontos de vida" />
                 </div>
               </div>
 
@@ -101,9 +108,9 @@
                   </div>
                   <div class="hp-readout">
                     <strong id="sanityCurrentText" class="journal-current-value">0</strong>
-                    <input id="sanityCurrentInput" class="stat-current-input" type="number" min="0" step="1" value="12" aria-label="Sanidade atual" />
+                    <input id="sanityCurrentInput" enterkeyhint="done" inputmode="numeric" class="stat-current-input" type="number" min="0" step="1" value="12" aria-label="Sanidade atual" />
                     <span>/</span>
-                    <input id="sanityMaxInput" class="stat-max-input" type="number" min="0" step="1" value="20" aria-label="Máximo de sanidade" />
+                    <input id="sanityMaxInput" enterkeyhint="done" inputmode="numeric" class="stat-max-input" type="number" min="0" step="1" value="20" aria-label="Máximo de sanidade" />
                   </div>
                 </div>
                 <div class="hp-bar-wrapper">
@@ -127,9 +134,9 @@
                   </div>
                   <div class="hp-readout">
                     <strong id="effortCurrentText" class="journal-current-value">0</strong>
-                    <input id="effortCurrentInput" class="stat-current-input" type="number" min="0" step="1" value="4" aria-label="Pontos de esforço atuais" />
+                    <input id="effortCurrentInput" enterkeyhint="done" inputmode="numeric" class="stat-current-input" type="number" min="0" step="1" value="4" aria-label="Pontos de esforço atuais" />
                     <span>/</span>
-                    <input id="effortMaxInput" class="stat-max-input" type="number" min="0" step="1" value="8" aria-label="Máximo de pontos de esforço" />
+                    <input id="effortMaxInput" enterkeyhint="done" inputmode="numeric" class="stat-max-input" type="number" min="0" step="1" value="8" aria-label="Máximo de pontos de esforço" />
                   </div>
                 </div>
                 <div class="hp-bar-wrapper">
@@ -162,11 +169,11 @@
             <form id="attributeForm" class="attribute-form" hidden>
               <label class="field">
                 <span>Nome do atributo <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="attributeNameInput" type="text" required aria-required="true" placeholder="Ex.: Percepção" />
+                <input id="attributeNameInput" enterkeyhint="done" type="text" required aria-required="true" placeholder="Ex.: Percepção" />
               </label>
               <label class="field compact">
                 <span>Valor <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="attributeValueInput" type="number" step="any" value="10" required aria-required="true" />
+                <input id="attributeValueInput" enterkeyhint="done" type="number" step="any" value="10" required aria-required="true" />
               </label>
               <div class="form-actions">
                 <button class="primary-btn" type="submit">Adicionar</button>
@@ -188,24 +195,26 @@
             <input id="skillIdInput" type="hidden" />
             <label class="field">
               <span>Perícia <span class="required-marker" aria-hidden="true">*</span></span>
-              <input id="skillNameInput" type="text" required aria-required="true" placeholder="Nome da perícia" />
+              <input id="skillNameInput" enterkeyhint="done" type="text" required aria-required="true" placeholder="Nome da perícia" />
             </label>
-            <label class="field">
-              <span>Dados / Atributo</span>
-              <select id="skillAttributeInput" multiple size="4" aria-describedby="skillAttributeHint"></select>
-              <small id="skillAttributeHint" class="field-hint">Selecione um ou mais atributos (Ctrl/Cmd para múltiplos); deixe sem seleção para não associar.</small>
-            </label>
+            <div class="field">
+              <span id="skillAttributeLabel">Dados / Atributo</span>
+              <select id="skillAttributeInput" multiple size="4" aria-labelledby="skillAttributeLabel" aria-describedby="skillAttributeHint"></select>
+              <!-- No celular, caixas de seleção substituem o select (preenchidas pelo script.js). -->
+              <div id="skillAttributeChecks" class="skill-attribute-checks" role="group" aria-labelledby="skillAttributeLabel" aria-describedby="skillAttributeHint"></div>
+              <small id="skillAttributeHint" class="field-hint">Selecione um ou mais atributos<span class="dica-teclado"> (Ctrl/Cmd para múltiplos)</span>; deixe sem seleção para não associar.</small>
+            </div>
             <label class="field compact">
               <span>Bônus</span>
-              <input id="skillBonusInput" type="number" step="any" value="0" aria-label="Bônus numérico da perícia" />
+              <input id="skillBonusInput" enterkeyhint="done" type="number" step="any" value="0" aria-label="Bônus numérico da perícia" />
             </label>
             <label class="field compact">
               <span>Treino</span>
-              <input id="skillTrainingInput" type="text" placeholder="Nível ou descrição" />
+              <input id="skillTrainingInput" enterkeyhint="done" type="text" placeholder="Nível ou descrição" />
             </label>
             <label class="field">
               <span>Outros</span>
-              <input id="skillOthersInput" type="text" placeholder="Modificadores adicionais" />
+              <input id="skillOthersInput" enterkeyhint="done" type="text" placeholder="Modificadores adicionais" />
             </label>
             <div class="form-actions wide">
               <button id="saveSkillBtn" class="primary-btn" type="submit">Salvar perícia</button>
@@ -241,12 +250,12 @@
               <input type="hidden" id="inventoryId" />
               <label class="field">
                 <span>Nome do item <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="itemName" type="text" placeholder="Poção de cura" required aria-required="true" />
+                <input id="itemName" enterkeyhint="done" type="text" placeholder="Poção de cura" required aria-required="true" />
               </label>
 
               <label class="field compact">
                 <span>Quantidade <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="itemQty" type="number" min="1" value="1" required aria-required="true" />
+                <input id="itemQty" enterkeyhint="done" inputmode="numeric" type="number" min="1" value="1" required aria-required="true" />
               </label>
 
               <label class="field wide field-only">
@@ -276,17 +285,17 @@
               <input type="hidden" id="arsenalId" />
               <label class="field">
                 <span>Nome da arma <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="weaponName" type="text" required aria-required="true" placeholder="Espada Longa" />
+                <input id="weaponName" enterkeyhint="done" type="text" required aria-required="true" placeholder="Espada Longa" />
               </label>
 
               <label class="field compact">
                 <span>Quantidade <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="weaponQuantity" type="number" min="1" step="1" value="1" required aria-required="true" />
+                <input id="weaponQuantity" enterkeyhint="done" inputmode="numeric" type="number" min="1" step="1" value="1" required aria-required="true" />
               </label>
 
               <label class="field">
                 <span>Dano <span class="required-marker" aria-hidden="true">*</span></span>
-                <input id="weaponDamage" type="text" required aria-required="true" placeholder="1d8 + 2" />
+                <input id="weaponDamage" enterkeyhint="done" type="text" required aria-required="true" placeholder="1d8 + 2" />
               </label>
 
               <label class="field wide field-only">
@@ -333,11 +342,11 @@
             <input id="relationshipId" type="hidden" />
             <label class="field">
               <span>Nome <span class="required-marker" aria-hidden="true">*</span></span>
-              <input id="relationshipName" type="text" required aria-required="true" placeholder="Nome do personagem" />
+              <input id="relationshipName" enterkeyhint="done" type="text" required aria-required="true" placeholder="Nome do personagem" />
             </label>
             <label class="field">
               <span>Identificação <span class="required-marker" aria-hidden="true">*</span></span>
-              <input id="relationshipIdentification" type="text" required aria-required="true" placeholder="Mentor, aliada, rival..." />
+              <input id="relationshipIdentification" enterkeyhint="done" type="text" required aria-required="true" placeholder="Mentor, aliada, rival..." />
             </label>
             <label class="field wide">
               <span>Descrição</span>
@@ -429,6 +438,13 @@
             <h2 id="diceTitle">Rolador de Dados</h2>
           </div>
 
+          <!-- Vale para a próxima rolagem (botões e expressão) e volta para Normal depois dela. -->
+          <div class="dice-mode" role="group" aria-label="Modo da próxima rolagem">
+            <button class="primary-btn dice-mode-btn" type="button" data-mode="normal" aria-pressed="true">Normal</button>
+            <button class="secondary-btn dice-mode-btn" type="button" data-mode="vantagem" aria-pressed="false">Vantagem</button>
+            <button class="secondary-btn dice-mode-btn" type="button" data-mode="desvantagem" aria-pressed="false">Desvantagem</button>
+          </div>
+
           <div class="dice-grid" role="group" aria-label="Escolher dado para rolar">
             <button class="dice-btn" type="button" data-sides="4" aria-label="Rolar dado de 4 lados">d4</button>
             <button class="dice-btn" type="button" data-sides="6" aria-label="Rolar dado de 6 lados">d6</button>
@@ -438,6 +454,27 @@
             <button class="dice-btn" type="button" data-sides="20" aria-label="Rolar dado de 20 lados">d20</button>
             <button class="dice-btn" type="button" data-sides="100" aria-label="Rolar dado de 100 lados">d100</button>
           </div>
+
+          <form id="diceExpressionForm" class="dice-expression-form" novalidate>
+            <div class="dice-expression-row">
+              <label class="field" for="diceExpressionInput">
+                <span>Expressão</span>
+                <input
+                  id="diceExpressionInput"
+                  type="text"
+                  placeholder="2d6+3"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  autocorrect="off"
+                  spellcheck="false"
+                  enterkeyhint="go"
+                  aria-describedby="diceExpressionHint"
+                />
+              </label>
+              <button class="primary-btn" type="submit">Rolar</button>
+            </div>
+            <small id="diceExpressionHint" class="field-hint">Ex.: d20+5, 2d6+3, 4d6kh3 (soma os 3 maiores) ou 2d20kl1 (fica com o menor).</small>
+          </form>
 
           <div class="dice-actions">
             <div class="dice-output">
@@ -471,12 +508,12 @@
           <form id="journalForm" class="journal-form">
             <label class="field">
               <span>Título do registro <span class="required-marker" aria-hidden="true">*</span></span>
-              <input id="journalTitleInput" type="text" placeholder="Ex: Encontro na Ponte Quebrada" required aria-required="true" />
+              <input id="journalTitleInput" enterkeyhint="done" type="text" placeholder="Ex: Encontro na Ponte Quebrada" required aria-required="true" />
             </label>
 
             <label class="field">
               <span>Tags personalizadas</span>
-              <input id="journalTagsInput" type="text" placeholder="#Combate, #Quest, #NPC" />
+              <input id="journalTagsInput" enterkeyhint="done" type="text" placeholder="#Combate, #Quest, #NPC" />
             </label>
 
             <label class="field">
@@ -509,7 +546,7 @@
               </label>
               <label id="journalEmotionOtherField" class="field hidden">
                 <span>Outra emoção (opcional)</span>
-                <input id="journalEmotionOther" type="text" placeholder="Descreva a emoção" autocomplete="off" />
+                <input id="journalEmotionOther" enterkeyhint="done" type="text" placeholder="Descreva a emoção" autocomplete="off" />
               </label>
               <label class="field compact">
                 <span>Intensidade (1 a 5)</span>
@@ -568,7 +605,7 @@
           <div class="journal-filters">
             <label class="field">
               <span>Buscar por palavra-chave</span>
-              <input id="journalSearch" type="search" placeholder="Procure por texto ou tag" />
+              <input id="journalSearch" enterkeyhint="search" type="search" placeholder="Procure por texto ou tag" />
             </label>
 
             <label class="field">

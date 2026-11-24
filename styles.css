@@ -69,6 +69,14 @@ body {
   transition: background 0.25s ease, color 0.25s ease;
 }
 
+/* Com viewport-fit=cover, afasta o conteúdo do notch e das bordas arredondadas.
+   Em telas sem recorte (e no desktop) env() vale 0 e nada muda. */
+body {
+  padding:
+    env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 /* Fallback para navegadores sem color-mix(). Precisa ser @supports porque, com var(),
    o navegador descarta a declaração inteira em vez de usar uma linha anterior.
    rgb(12, 18, 34) é o mesmo resultado de --bg (#0f172a) 80% + preto 20%.
@@ -168,8 +176,11 @@ summary:focus-visible,
   outline-offset: 3px;
 }
 
-button:hover {
-  transform: translateY(-1px);
+/* Só em aparelhos com mouse: no toque, o :hover "gruda" depois do toque. */
+@media (hover: hover) {
+  button:hover {
+    transform: translateY(-1px);
+  }
 }
 
 .app-shell {
@@ -690,6 +701,17 @@ body[data-theme='journal'] .journal-current-value {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 400;
+}
+
+/* Trecho da dica que só vale com teclado; herda o estilo da dica (não o de .field span). */
+.field-hint .dica-teclado {
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* Caixas de seleção de atributos da perícia: só aparecem no celular (ver @media 640px). */
+.skill-attribute-checks {
+  display: none;
 }
 
 .skills-table-wrap {
@@ -1245,10 +1267,12 @@ body[data-theme='journal'] .item-tag::before {
   transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.relationship-pixel-art-trigger:hover {
-  transform: translateY(-1px);
-  background: rgba(212, 161, 92, 0.18);
-  box-shadow: 0 3px 8px var(--shadow);
+@media (hover: hover) {
+  .relationship-pixel-art-trigger:hover {
+    transform: translateY(-1px);
+    background: rgba(212, 161, 92, 0.18);
+    box-shadow: 0 3px 8px var(--shadow);
+  }
 }
 
 .relationship-pixel-art-trigger:focus-visible {
@@ -1643,6 +1667,43 @@ body[data-theme='journal'] .item-tag::before {
   margin-top: 1rem;
 }
 
+/* Modo da próxima rolagem: o botão ativo usa .primary-btn e os outros .secondary-btn. */
+.dice-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.dice-mode-btn {
+  flex: 1 1 0;
+}
+
+.dice-expression-form {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.dice-expression-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.dice-expression-row .field {
+  flex: 1;
+}
+
+/* Detalhe da rolagem no histórico (dados, descartados entre parênteses e modificador). */
+.roll-detail {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
 .dice-output {
   display: flex;
   justify-content: space-between;
@@ -1822,11 +1883,18 @@ body[data-theme='journal'] .item-tag::before {
   transition: opacity 180ms ease, transform 180ms ease, background 180ms ease;
 }
 
-.journal-delete-btn:hover,
 .journal-delete-btn:focus-visible {
   opacity: 1;
   background: var(--danger);
   color: #fff8e8;
+}
+
+@media (hover: hover) {
+  .journal-delete-btn:hover {
+    opacity: 1;
+    background: var(--danger);
+    color: #fff8e8;
+  }
 }
 
 .journal-title {
@@ -2156,10 +2224,18 @@ body[data-theme='journal'] .item-tag::before {
   .skills-table .skill-row td,
   .arsenal-table .arsenal-row td,
   .dice-history-table .dice-history-item td {
+    /* Sem isso, as larguras em % das colunas (td:nth-child) espremiam cada célula do cartão. */
+    width: 100%;
     display: grid;
     grid-template-columns: minmax(6.5rem, 0.42fr) minmax(0, 1fr);
     gap: 0.65rem;
     padding: 0.6rem 0;
+  }
+
+  /* No cartão, o detalhe fica embaixo do total (2ª coluna), não embaixo do rótulo. */
+  .dice-history-table .roll-detail {
+    grid-column: 2;
+    margin-top: -0.4rem;
   }
 
   .skills-table .skill-row td::before,
@@ -2183,6 +2259,8 @@ body[data-theme='journal'] .item-tag::before {
   .pixel-art-dialog {
     width: calc(100vw - 1rem);
     max-height: calc(100vh - 1rem);
+    /* dvh desconta a barra de endereço do navegador do celular; 100vh fica de reserva. */
+    max-height: calc(100dvh - 1rem);
   }
 
   .pixel-art-editor {
@@ -2236,7 +2314,7 @@ body[data-theme='journal'] .item-tag::before {
   }
 
   .pixel-art-swatch {
-    min-height: 26px;
+    min-height: 44px;
   }
 
   .journal-arsenal-item {
@@ -2311,8 +2389,99 @@ body[data-theme='journal'] .item-tag::before {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Os três modos cabem lado a lado em 360px. */
+  .dice-mode {
+    gap: 0.5rem;
+  }
+
+  .dice-mode-btn {
+    padding-right: 0.4rem;
+    padding-left: 0.4rem;
+  }
+
   .compact {
     max-width: none;
+  }
+
+  /* Alvos de toque de pelo menos 44px nas ações das listas e controles pequenos. */
+  .skill-actions button,
+  .arsenal-actions button,
+  .relationship-actions button,
+  .pixel-art-close,
+  .pixel-art-history button,
+  .pixel-art-resolution select,
+  .pixel-art-clear,
+  .journal-reflection-toggle,
+  .file-upload {
+    min-height: 44px;
+  }
+
+  .relationship-pixel-art-trigger {
+    flex-basis: 44px;
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .journal-delete-btn {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  /* Padding em vez de display: flex, para não perder o triângulo do <details>. */
+  .journal-reflection summary {
+    padding: 0.625rem 0;
+  }
+
+  /* Perícias: caixas de seleção no lugar do <select multiple>, que continua guardando a escolha. */
+  #skillAttributeInput,
+  .field-hint .dica-teclado {
+    display: none;
+  }
+
+  .skill-attribute-checks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .skill-attribute-check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.8rem;
+    background: var(--input-bg);
+    cursor: pointer;
+  }
+
+  .field .skill-attribute-check input {
+    flex: 0 0 auto;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+  }
+
+  .skill-attribute-check span {
+    overflow-wrap: anywhere;
+  }
+
+  /* Mensagens fixas na parte de baixo, perto de onde a pessoa está tocando. */
+  .app-status {
+    position: fixed;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    left: 0.5rem;
+    z-index: 20;
+    margin: 0;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 16px 32px var(--shadow);
   }
 }
 

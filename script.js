@@ -267,6 +267,7 @@ const skillForm = document.getElementById('skillForm');
 const skillIdInput = document.getElementById('skillIdInput');
 const skillNameInput = document.getElementById('skillNameInput');
 const skillAttributeInput = document.getElementById('skillAttributeInput');
+const skillAttributeChecks = document.getElementById('skillAttributeChecks');
 const skillBonusInput = document.getElementById('skillBonusInput');
 const skillTrainingInput = document.getElementById('skillTrainingInput');
 const skillOthersInput = document.getElementById('skillOthersInput');
@@ -276,12 +277,17 @@ const cancelSkillBtn = document.getElementById('cancelSkillBtn');
 const skillsList = document.getElementById('skillsList');
 
 const themeToggleBtn = document.getElementById('themeToggle');
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+const wakeLockBtn = document.getElementById('wakeLockBtn');
 const exportBtn = document.getElementById('exportBtn');
 const importInput = document.getElementById('importFile');
 
 const lastRollText = document.getElementById('lastRoll');
 const diceHistoryList = document.getElementById('diceHistory');
 const clearDiceHistoryBtn = document.getElementById('clearDiceHistoryBtn');
+const diceExpressionForm = document.getElementById('diceExpressionForm');
+const diceExpressionInput = document.getElementById('diceExpressionInput');
+const diceModeButtons = document.querySelectorAll('.dice-mode-btn');
 
 const journalForm = document.getElementById('journalForm');
 const journalTitleInput = document.getElementById('journalTitleInput');
@@ -308,6 +314,25 @@ const journalDeleteDialog = document.getElementById('journalDeleteDialog');
 const journalDeleteCancelBtn = document.getElementById('journalDeleteCancelBtn');
 const journalDeleteConfirmBtn = document.getElementById('journalDeleteConfirmBtn');
 let journalEntryPendingDeleteId = null;
+// Modo da próxima rolagem ('normal', 'vantagem' ou 'desvantagem'). Não é salvo: vale para uma rolagem.
+let modoRolagem = 'normal';
+
+// Limites para uma expressão digitada não travar o celular.
+const LIMITES_ROLAGEM = {
+  dados: 100,
+  faces: 1000,
+  constante: 10000,
+  termos: 20,
+};
+// Screen Wake Lock: vale só para esta sessão (não vai para o state nem para o backup).
+let wakeLock = null;
+let telaAcesaLigada = false;
+
+// Mesmas cores de --bg de cada tema no styles.css.
+const CORES_TEMA = {
+  field: '#0f172a',
+  journal: '#2c1f13',
+};
 const relationshipForm = document.getElementById('relationshipForm');
 const relationshipIdInput = document.getElementById('relationshipId');
 const relationshipNameInput = document.getElementById('relationshipName');
@@ -381,12 +406,16 @@ function init() {
   bindRelationshipsList();
   bindPixelArtEditor();
   bindDiceButtons();
+  bindDiceModeButtons();
+  bindDiceExpressionForm();
   bindDiceHistoryClear();
   bindJournalForm();
   bindThemeToggle();
   bindBackupActions();
   bindStorageSync();
+  bindWakeLock();
   renderAll();
+  registrarServiceWorker();
 }
 
 function generateId() {
@@ -757,12 +786,21 @@ function normalizeDiceEntry(entry, usedIds) {
     ? NaN
     : Number(entry.value);
 
+  const total = entry.total === null || entry.total === '' || entry.total === undefined
+    ? NaN
+    : Number(entry.total);
+
   return {
     ...entry,
     id: normalizeId(entry.id, usedIds),
     timestamp: normalizeTimestamp(entry.timestamp),
     sides: Number.isInteger(sides) && sides > 0 ? sides : parsedRoll?.sides ?? null,
     value: Number.isFinite(value) ? value : parsedRoll?.value ?? null,
+    // Rolagens com expressão (ex.: 2d6+3): o total pode ser 0, negativo ou maior que o dado.
+    expression: typeof entry.expression === 'string' ? entry.expression.trim() : '',
+    total: Number.isFinite(total) ? total : null,
+    detail: typeof entry.detail === 'string' ? entry.detail : '',
+    label: typeof entry.label === 'string' ? entry.label : '',
   };
 }
 
@@ -1424,6 +1462,16 @@ function bindSkillForm() {
   });
 
   cancelSkillBtn.addEventListener('click', clearSkillForm);
+
+  // No celular, as caixas de seleção só marcam as opções do <select multiple>,
+  // que continua sendo a fonte dos attributeIds salvos.
+  skillAttributeChecks.addEventListener('change', (event) => {
+    const check = event.target.closest('input[type="checkbox"]');
+    if (!check) return;
+    const option = Array.from(skillAttributeInput.options).find((entry) => entry.value === check.value);
+    if (option) option.selected = check.checked;
+  });
+  skillAttributeInput.addEventListener('change', renderSkillAttributeChecks);
 }
 
 function bindSkillsList() {
@@ -1440,6 +1488,7 @@ function bindSkillsList() {
       Array.from(skillAttributeInput.options).forEach((option) => {
         option.selected = skill.attributeIds.includes(option.value);
       });
+      renderSkillAttributeChecks();
       skillBonusInput.value = skill.bonus;
       skillTrainingInput.value = skill.training;
       skillOthersInput.value = skill.others;
@@ -2033,22 +2082,192 @@ function bindDiceButtons() {
   document.querySelectorAll('.dice-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const sides = Number(button.dataset.sides || 20);
-      const result = getRandomInt(1, sides);
-      const label = `d${sides} = ${result}`;
-
-      state.diceHistory.unshift({
-        id: generateId(),
-        result: label,
-        sides,
-        value: result,
-        timestamp: new Date().toISOString(),
-      });
-
-      state.diceHistory = state.diceHistory.slice(0, 12);
-      lastRollText.textContent = label;
-      saveState();
-      renderDiceHistory();
+      rolarExpressao(`d${sides}`);
     });
+  });
+}
+
+function bindDiceModeButtons() {
+  diceModeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      modoRolagem = button.dataset.mode;
+      renderDiceMode();
+    });
+  });
+}
+
+function bindDiceExpressionForm() {
+  diceExpressionForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    // A expressão continua no campo para repetir a rolagem com um toque.
+    rolarExpressao(diceExpressionInput.value);
+  });
+}
+
+// Interpreta, rola e grava no histórico. Erros de digitação viram mensagem na tela.
+function rolarExpressao(texto) {
+  let rolagem;
+  try {
+    rolagem = aplicarModoRolagem(interpretarExpressao(texto), modoRolagem);
+  } catch (error) {
+    showAppMessage(error.message, 'error');
+    return;
+  }
+
+  const { total, detalhe, simples } = rolarTermos(rolagem);
+  const expressao = formatarExpressao(rolagem);
+  const entrada = {
+    id: generateId(),
+    result: `${expressao} = ${total}`,
+    // sides e value só numa rolagem simples (ex.: d20 = 15), no formato de sempre.
+    // Nas outras ficam null: o validador de backup exige 1 <= value <= sides.
+    sides: simples ? rolagem[0].faces : null,
+    value: simples ? total : null,
+    timestamp: new Date().toISOString(),
+  };
+  if (!simples) {
+    entrada.expression = expressao;
+    entrada.total = total;
+    entrada.detail = detalhe;
+    entrada.label = { vantagem: 'Vantagem', desvantagem: 'Desvantagem' }[modoRolagem] || '';
+  }
+
+  state.diceHistory.unshift(entrada);
+  state.diceHistory = state.diceHistory.slice(0, 12);
+  modoRolagem = 'normal';
+  saveState();
+  renderDiceHistory();
+  renderDiceMode();
+}
+
+// Lê expressões como "d20+5", "2d6 + 3", "4d6kh3", "2d20kl1" ou "d%". Não usa eval.
+// Devolve a lista de termos ou lança um Error com a mensagem para a pessoa.
+function interpretarExpressao(texto) {
+  // Espaços só são aceitos em volta de + e - ("2d6 + 3"); "d20 5" não vira "d205".
+  const limpo = String(texto || '').trim().toLowerCase().replace(/\s*([+-])\s*/g, '$1');
+  if (!limpo) throw new Error('Digite uma expressão, como d20+5 ou 2d6+3.');
+
+  const erroFormato = new Error(`Não entendi a expressão "${String(texto).trim()}". Use algo como d20+5, 2d6+3 ou 4d6kh3.`);
+  if (/\s/.test(limpo)) throw erroFormato;
+  // Cada termo: sinal opcional + (dados com "manter" opcional) ou um número.
+  const padraoTermo = /([+-]?)(?:(\d*)d(\d+|%)(?:(kh|kl|k)(\d*))?|(\d+))/y;
+  const termos = [];
+  let posicao = 0;
+
+  while (posicao < limpo.length) {
+    padraoTermo.lastIndex = posicao;
+    const partes = padraoTermo.exec(limpo);
+    // Depois do primeiro termo, todo termo precisa começar com + ou -.
+    if (!partes || (termos.length && !partes[1])) throw erroFormato;
+    posicao = padraoTermo.lastIndex;
+    const sinal = partes[1] === '-' ? -1 : 1;
+
+    if (partes[6] !== undefined) {
+      const valor = Number(partes[6]);
+      if (valor > LIMITES_ROLAGEM.constante) {
+        throw new Error(`Use modificadores de até ${LIMITES_ROLAGEM.constante}.`);
+      }
+      termos.push({ tipo: 'constante', sinal, valor });
+    } else {
+      const quantidade = partes[2] ? Number(partes[2]) : 1;
+      const faces = partes[3] === '%' ? 100 : Number(partes[3]);
+      const manter = partes[4] ? (partes[4] === 'kl' ? 'menor' : 'maior') : null;
+      const quantosManter = manter ? (partes[5] ? Number(partes[5]) : 1) : quantidade;
+      if (quantidade < 1 || faces < 1) throw erroFormato;
+      if (quantidade > LIMITES_ROLAGEM.dados) {
+        throw new Error(`Role no máximo ${LIMITES_ROLAGEM.dados} dados de uma vez.`);
+      }
+      if (faces > LIMITES_ROLAGEM.faces) {
+        throw new Error(`Use dados de até ${LIMITES_ROLAGEM.faces} faces.`);
+      }
+      if (quantosManter < 1 || quantosManter > quantidade) {
+        throw new Error(`Em "${quantidade}d${faces}", dá para manter de 1 a ${quantidade} dado(s).`);
+      }
+      termos.push({ tipo: 'dados', sinal, quantidade, faces, manter, quantosManter });
+    }
+
+    if (termos.length > LIMITES_ROLAGEM.termos) {
+      throw new Error(`Use no máximo ${LIMITES_ROLAGEM.termos} partes na expressão.`);
+    }
+  }
+
+  const totalDados = termos.reduce((soma, termo) => soma + (termo.tipo === 'dados' ? termo.quantidade : 0), 0);
+  if (totalDados > LIMITES_ROLAGEM.dados) {
+    throw new Error(`Role no máximo ${LIMITES_ROLAGEM.dados} dados de uma vez.`);
+  }
+  return termos;
+}
+
+// Vantagem: o dado único vira "2 dados, fica com o maior"; desvantagem, com o menor.
+// Se houver mais de um dado único (ex.: d20+d4), usa o d20 ou, sem d20, o primeiro.
+function aplicarModoRolagem(termos, modo) {
+  if (modo !== 'vantagem' && modo !== 'desvantagem') return termos;
+  const unicos = termos.filter((termo) => termo.tipo === 'dados' && termo.quantidade === 1 && !termo.manter);
+  const alvo = unicos.find((termo) => termo.faces === 20) || unicos[0];
+  if (!alvo) {
+    throw new Error('Vantagem e desvantagem valem para expressões com um dado único, como d20+5.');
+  }
+  return termos.map((termo) => (termo === alvo
+    ? { ...termo, quantidade: 2, manter: modo === 'vantagem' ? 'maior' : 'menor', quantosManter: 1 }
+    : termo));
+}
+
+// Rola cada termo. O detalhe mostra os dados; os descartados ficam entre parênteses.
+function rolarTermos(termos) {
+  let total = 0;
+  const pedacos = [];
+
+  termos.forEach((termo) => {
+    let valor;
+    let texto;
+    if (termo.tipo === 'constante') {
+      valor = termo.valor;
+      texto = String(termo.valor);
+    } else {
+      const resultados = Array.from({ length: termo.quantidade }, () => getRandomInt(1, termo.faces));
+      const ordem = resultados
+        .map((resultado, indice) => ({ resultado, indice }))
+        .sort((a, b) => (termo.manter === 'menor' ? a.resultado - b.resultado : b.resultado - a.resultado));
+      const mantidos = new Set(ordem.slice(0, termo.quantosManter).map((item) => item.indice));
+      valor = resultados.reduce((soma, resultado, indice) => soma + (mantidos.has(indice) ? resultado : 0), 0);
+      texto = resultados.length === 1
+        ? String(resultados[0])
+        : `[${resultados.map((resultado, indice) => (mantidos.has(indice) ? resultado : `(${resultado})`)).join(', ')}]`;
+    }
+    total += termo.sinal * valor;
+    pedacos.push({ sinal: termo.sinal, texto });
+  });
+
+  const detalhe = pedacos
+    .map((pedaco, indice) => {
+      if (indice === 0) return pedaco.sinal < 0 ? `-${pedaco.texto}` : pedaco.texto;
+      return `${pedaco.sinal < 0 ? '-' : '+'} ${pedaco.texto}`;
+    })
+    .join(' ');
+  const primeiro = termos[0];
+  const simples = termos.length === 1 && primeiro.tipo === 'dados' && primeiro.sinal > 0 &&
+    primeiro.quantidade === 1 && !primeiro.manter;
+
+  return { total, detalhe, simples };
+}
+
+// Escreve a expressão de forma padronizada (ex.: "2d20kh1+5").
+function formatarExpressao(termos) {
+  return termos.map((termo, indice) => {
+    const sinal = termo.sinal < 0 ? '-' : (indice === 0 ? '' : '+');
+    if (termo.tipo === 'constante') return `${sinal}${termo.valor}`;
+    const quantidade = termo.quantidade > 1 ? termo.quantidade : '';
+    const manter = termo.manter ? `${termo.manter === 'menor' ? 'kl' : 'kh'}${termo.quantosManter}` : '';
+    return `${sinal}${quantidade}d${termo.faces}${manter}`;
+  }).join('');
+}
+
+function renderDiceMode() {
+  diceModeButtons.forEach((button) => {
+    const ativo = button.dataset.mode === modoRolagem;
+    button.classList.toggle('primary-btn', ativo);
+    button.classList.toggle('secondary-btn', !ativo);
+    button.setAttribute('aria-pressed', String(ativo));
   });
 }
 
@@ -2191,7 +2410,71 @@ function bindThemeToggle() {
     state.theme = nextTheme;
     document.body.dataset.theme = nextTheme;
     themeToggleBtn.textContent = nextTheme === 'field' ? 'Modo Diário Manuscrito' : 'Modo Ficha de Campo';
+    atualizarCorDoTema(nextTheme);
     saveState();
+  });
+}
+
+// Pinta a barra do navegador (meta theme-color) com o fundo do tema atual.
+function atualizarCorDoTema(theme) {
+  themeColorMeta.setAttribute('content', CORES_TEMA[theme] || CORES_TEMA.field);
+}
+
+// Fallback silencioso: sem suporte a Wake Lock, o botão continua escondido.
+function bindWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+
+  wakeLockBtn.hidden = false;
+  wakeLockBtn.addEventListener('click', async () => {
+    telaAcesaLigada = !telaAcesaLigada;
+    if (telaAcesaLigada) {
+      const conseguiu = await pedirWakeLock();
+      if (!conseguiu) {
+        telaAcesaLigada = false;
+        showAppMessage('Não foi possível manter a tela acesa agora. Verifique se a economia de bateria está ligada.', 'warning');
+      }
+    } else if (wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+    renderWakeLock();
+  });
+
+  // O navegador solta o bloqueio quando a aba fica escondida; ao voltar, pede de novo.
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !telaAcesaLigada || wakeLock) return;
+    await pedirWakeLock();
+    renderWakeLock();
+  });
+}
+
+async function pedirWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+    });
+    return true;
+  } catch (error) {
+    wakeLock = null;
+    return false;
+  }
+}
+
+function renderWakeLock() {
+  wakeLockBtn.textContent = telaAcesaLigada ? 'Tela acesa: ligada' : 'Manter tela acesa';
+  wakeLockBtn.setAttribute('aria-pressed', String(telaAcesaLigada));
+}
+
+// Offline: só funciona em http(s), como no GitHub Pages. Abrindo o index.html direto
+// (file://) o navegador não aceita service worker, então não tenta registrar.
+function registrarServiceWorker() {
+  if (!('serviceWorker' in navigator) || window.location.protocol === 'file:') return;
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // Sem service worker o site continua funcionando normalmente, só não abre offline.
+    });
   });
 }
 
@@ -2368,6 +2651,15 @@ function validateDiceBackupEntry(entry) {
   if (!isPlainObject(entry) || typeof entry.result !== 'string' || !entry.result.trim()) {
     throw new Error('Uma rolagem do histórico está incompleta ou inválida.');
   }
+  // Campos das rolagens com expressão: opcionais, para backups antigos continuarem válidos.
+  ['expression', 'detail', 'label'].forEach((key) => {
+    if (entry[key] !== undefined && entry[key] !== null && typeof entry[key] !== 'string') {
+      throw new Error('Uma rolagem do histórico está incompleta ou inválida.');
+    }
+  });
+  if (entry.total !== undefined && !isBackupNumber(entry.total)) {
+    throw new Error('O total de uma rolagem é inválido.');
+  }
   if (entry.sides !== undefined && entry.sides !== null &&
     (!isBackupNumber(entry.sides) || !Number.isInteger(Number(entry.sides)) || Number(entry.sides) < 1)) {
     throw new Error('O tipo de dado de uma rolagem é inválido.');
@@ -2520,6 +2812,7 @@ function renderTheme() {
   const theme = state.theme || 'field';
   document.body.dataset.theme = theme;
   themeToggleBtn.textContent = theme === 'field' ? 'Modo Diário Manuscrito' : 'Modo Ficha de Campo';
+  atualizarCorDoTema(theme);
 }
 
 function renderCharacterBlock() {
@@ -2540,11 +2833,11 @@ function renderAttributes() {
     card.innerHTML = `
       <label class="attribute-name-field">
         <span class="sr-only">Nome do atributo</span>
-        <input type="text" data-attribute-name value="${safeName}" aria-label="Nome do atributo ${safeName}" required />
+        <input type="text" data-attribute-name value="${safeName}" aria-label="Nome do atributo ${safeName}" enterkeyhint="done" required />
       </label>
       <label class="attribute-value-field">
         <span class="sr-only">Valor de ${safeName}</span>
-        <input type="number" step="any" data-attribute-value value="${escapeHtml(String(attribute.value))}" aria-label="Valor de ${safeName}" />
+        <input type="number" step="any" data-attribute-value value="${escapeHtml(String(attribute.value))}" aria-label="Valor de ${safeName}" enterkeyhint="done" />
       </label>
     `;
     attributesGrid.appendChild(card);
@@ -2567,6 +2860,7 @@ function renderSkills() {
   Array.from(skillAttributeInput.options).forEach((option) => {
     option.selected = selectedAttributes.includes(option.value);
   });
+  renderSkillAttributeChecks();
 
   skillsList.innerHTML = '';
   if (!state.skills.length) {
@@ -2598,6 +2892,16 @@ function renderSkills() {
       `;
       skillsList.appendChild(row);
     });
+}
+
+// Caixas de seleção do celular, espelhando as opções e a seleção do <select multiple>.
+function renderSkillAttributeChecks() {
+  skillAttributeChecks.innerHTML = Array.from(skillAttributeInput.options).map((option) => `
+    <label class="skill-attribute-check">
+      <input type="checkbox" value="${escapeHtml(option.value)}"${option.selected ? ' checked' : ''} />
+      <span>${escapeHtml(option.textContent)}</span>
+    </label>
+  `).join('');
 }
 
 function renderHp(preserveCurrentInput = false) {
@@ -2865,10 +3169,13 @@ function renderDiceHistory() {
       ? entry.value
       : parsedRoll?.value;
     const dateTime = formatRollDate(entry.timestamp);
+    const total = Number.isFinite(entry.total) ? entry.total : value;
+    const dado = entry.expression || (sides ? `d${sides}` : 'Dado');
+    const detalhe = entry.detail ? `${entry.label ? `${entry.label}: ` : ''}${entry.detail}` : '';
     item.className = `dice-history-item${index === 0 ? ' latest-roll' : ''}`;
     item.innerHTML = `
-      <td data-label="Dado"><span class="roll-die">${sides ? `d${sides}` : 'Dado'}</span></td>
-      <td data-label="Resultado"><strong class="roll-result">${value === undefined ? escapeHtml(entry.result) : escapeHtml(String(value))}</strong></td>
+      <td data-label="Dado"><span class="roll-die">${escapeHtml(dado)}</span></td>
+      <td data-label="Resultado"><strong class="roll-result">${total === undefined || total === null ? escapeHtml(entry.result) : escapeHtml(String(total))}</strong>${detalhe ? `<small class="roll-detail">${escapeHtml(detalhe)}</small>` : ''}</td>
       <td data-label="Data e horário"><time class="roll-time"${entry.timestamp ? ` datetime="${escapeHtml(entry.timestamp)}"` : ''}>${escapeHtml(dateTime)}</time></td>
     `;
 
