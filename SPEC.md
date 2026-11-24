@@ -1,0 +1,460 @@
+# SPEC — Chronicles & Sheet
+
+> Especificação descritiva do projeto **como ele está hoje**. A primeira versão deste documento analisou o código original das alunas. Depois disso vieram correções, e as seções abaixo descrevem o comportamento atual. A seção 9 registra o que foi resolvido e o que continua pendente.
+
+---
+
+## 1. Visão geral
+
+**Chronicles & Sheet** é uma aplicação web de página única (SPA estática) de apoio a **RPG de mesa**. Ela reúne num só lugar as ferramentas que um jogador usa durante uma sessão:
+
+- ficha de campo (dados básicos, barras de vida/sanidade/esforço, atributos e perícias personalizáveis);
+- inventário;
+- Arsenal independente para armas, quantidade, dano e descrição;
+- rolador de dados com histórico;
+- diário psicológico com tags, estado emocional, reflexões e busca;
+- relações entre personagens;
+- dois temas visuais ("Ficha de Campo" e "Diário Manuscrito");
+- backup em arquivo `.json` (exportar/importar).
+
+Tudo roda **no navegador**, sem servidor, sem build e sem bibliotecas externas. Os dados ficam salvos no `localStorage`. O projeto foi pensado para ser publicado direto no **GitHub Pages**.
+
+### 1.1 Intenção do projeto
+
+O arquivo `TEXTOS SCRIPT JOGO.txt` mostra a origem do projeto: é um **prompt** escrito para uma IA ("Atue como um desenvolvedor web especialista...") que descreve os requisitos do site. O código (`index.html`, `styles.css`, `script.js`) é a implementação desses requisitos, com alguns **acréscimos** que não estavam no prompt (barras de Sanidade e Esforço, botão de limpar histórico de dados, botão de ocultar atributos).
+
+Objetivos declarados no prompt:
+
+| Objetivo | Descrição |
+|---|---|
+| 100% client-side | Sem backend; pronto para GitHub Pages |
+| Vanilla | HTML5 + CSS3 + JavaScript puro, sem frameworks |
+| Persistência local | `localStorage` |
+| Portabilidade | Exportar/importar backup `.json` |
+| Duas "personalidades" visuais | Interface técnica moderna × estilo pergaminho/fantasia |
+
+---
+
+## 2. Estrutura de arquivos
+
+```
+Ana Livia e Zarpelon/
+├── index.html               (284 linhas)  Estrutura e conteúdo da página
+├── styles.css               (702 linhas)  Visual, temas e responsividade
+├── script.js                (929 linhas)  Estado, lógica, eventos e renderização
+├── TEXTOS SCRIPT JOGO.txt   ( 43 linhas)  Prompt/requisitos originais do projeto
+├── README.md                              Apresentação, créditos e como usar
+├── CLAUDE.md                              Regras para quem for alterar o projeto
+└── SPEC.md                                Este documento
+```
+
+Não existe `package.json`, pasta de assets nem testes automatizados no repositório. O código está no GitHub (`professoralissonlucas/chronicles-sheet`, branch `main`). Para rodar, basta abrir `index.html` no navegador.
+
+Separação de responsabilidades:
+
+- **HTML** → define *todas* as seções e campos de forma estática. Apenas as listas (inventário, Arsenal, histórico de dados, diário) e as opções do filtro de tags são geradas pelo JS.
+- **CSS** → define os dois temas com **variáveis CSS** (custom properties) e decide quais painéis aparecem em cada tema.
+- **JS** → mantém um único objeto `state`, salva no `localStorage` a cada mudança e redesenha a parte afetada da tela.
+
+---
+
+## 3. Interface (index.html)
+
+Idioma `pt-BR`. O `<body>` começa com `data-theme="field"`.
+
+```
+.app-shell
+├── header.topbar
+│   ├── "RPG de mesa" / h1 "Chronicles & Sheet"
+│   └── ações: [Alternar tema] [Exportar Backup] [Importar Backup (input file oculto)]
+└── main.layout  (grid de 12 colunas)
+    ├── section  Personagem e barras vitais
+    ├── section.attributes-section  Atributos dinâmicos
+    ├── section.skills-panel  Perícias
+    ├── section  Inventário
+    ├── section.arsenal-panel  Arsenal (Ficha de Campo e Diário Manuscrito)
+    ├── section  Relações (Diário Manuscrito)
+    ├── section.journal-panel  Diário Psicológico (Diário Manuscrito)
+    └── section  Rolador de Dados e Histórico (Ficha de Campo)
+```
+
+### 3.1 Ficha Técnica do Personagem
+
+| Elemento | ID / seletor | Observação |
+|---|---|---|
+| Nome | `#charName` | texto |
+| Classe | `#charClass` | texto |
+| Nível | `#charLevel` | número, `min=1 max=99` |
+| Anotações gerais | `#charNotes` | textarea |
+| Pontos de Vida | `#hpBar`, `#hpCurrentInput`, `#hpMaxInput`, `#hpStatus` | valores atual/máximo editáveis e botões `-5 -1 +1 +5` com `data-stat="hp"` |
+| Sanidade | `#sanityBar`, `#sanityCurrentInput`, `#sanityMaxInput`, `#sanityStatus` | valores editáveis e botões `.vital-btn` com `data-stat="sanity"` |
+| Pontos de Esforço | `#effortBar`, `#effortCurrentInput`, `#effortMaxInput`, `#effortStatus` | valores editáveis e botões `.vital-btn` com `data-stat="effort"` |
+| Atributos | `#attributesGrid .attribute[data-attribute-id]` | cada atributo tem ID estável, nome e valor numérico editáveis; a lista não tem limite fixo |
+| Perícias | `#skillsList` | tabela editável com atributo associado, bônus, treino, outros e ações |
+| Ocultar atributos | `#toggleAttributesBtn` | alterna entre "Ocultar" e "Mostrar" e esconde `.attributes-grid`; fica à direita do título "Atributos" (`.attributes-header` usa o mesmo alinhamento de `.hp-header`) |
+
+Os três recursos compartilham um único estado entre os temas. Atual e máximo podem ser editados na Ficha de Campo; a barra e o indicador de condição acompanham a edição.
+
+### 3.2 Inventário
+
+Formulário `#inventoryForm` com `#inventoryId` (oculto, guarda o ID em edição), `#itemName` (obrigatório), `#itemQty` (mín. 1), `#itemDescription`, botões `#saveItemBtn` e `#cancelEditBtn` (oculto até entrar em modo edição). Lista: `#inventoryList`.
+
+### 3.2.1 Arsenal
+
+Seção `#arsenalTitle` compartilhada pelos dois temas. O formulário `#arsenalForm` cadastra nome, quantidade inteira positiva, expressão de dano textual obrigatória e descrição opcional. Na Ficha de Campo, a tabela `#arsenalList` exibe todos os campos; no Diário Manuscrito, `#journalArsenalList` mostra cartões compactos com nome, dano e quantidade, omitindo a descrição. Ambos oferecem edição e remoção confirmada e usam a mesma lista `state.arsenal`.
+
+### 3.3 Rolador de Dados
+
+Sete botões `.dice-btn` com `data-sides` = 4, 6, 8, 10, 12, 20, 100. Exibição `#lastRoll`, botão `#clearDiceHistoryBtn` e tabela `#diceHistory` com dado, resultado e data/hora; o registro mais recente aparece primeiro e recebe destaque.
+
+### 3.4 Diário Psicológico
+
+Formulário `#journalForm` com título e acontecimento obrigatórios, tags, estado emocional e intensidade opcionais, além de reflexões recolhidas por padrão. Data e horário são automáticos. Filtros: busca livre `#journalSearch` e `<select id="journalTagFilter">`. Lista: `#journalList`.
+
+### 3.5 Acessibilidade
+
+- Seções com `aria-labelledby` apontando para seus títulos.
+- Listas e mensagens de status com regiões vivas; erros são anunciados com prioridade.
+- Campos obrigatórios marcados visualmente e via `aria-required`; controles têm rótulos associados.
+- Barras vitais expõem seu valor com `role="progressbar"`; grupos de botões e controles de mostrar/ocultar têm nomes e estados acessíveis.
+- Estados de foco visíveis usam a cor de destaque de cada tema; animações respeitam a preferência por movimento reduzido.
+
+---
+
+## 4. Modelo de dados (script.js)
+
+Chave no `localStorage`: **`chronicles-sheet-state-v1`** (o sufixo `v1` indica intenção de versionar o formato).
+
+```js
+state = {
+  dataVersion: 5,                    // versão usada para migrações únicas do estado
+  theme: 'field' | 'journal',
+  attributesHidden: boolean,          // preferência do botão Ocultar/Mostrar (padrão false)
+  character: {
+    name: string,
+    className: string,
+    level: number,
+    notes: string,
+    hp:     { current: number, max: number },
+    sanity: { current: number, max: number },
+    effort: { current: number, max: number },
+    attributes: [{ id, name, value }] // lista dinâmica
+  },
+  inventory:   [{ id, name, quantity, description }],
+  arsenal:     [{ id, name, quantity, damage, description }],
+  diceHistory: [{ id, result: "d20 = 15", sides, value, timestamp: ISOString }], // máx. 12
+  journal:     [{
+    id, title, content, tags: ["#Tag"], timestamp: ISOString,
+    emotion, emotionOther, emotionIntensity,
+    reflection: { thoughts, feelings, fears, desires, innerConflict, relationships, learning, worldview }
+  }],
+  relationships: [{
+    id, name, identification, bondType: "common" | "romantic",
+    affinityType: "positive" | "negative",
+    affinityLevel: 1 | 2 | 3, description
+  }],
+  skills: [{ id, name, attributeIds, attributeId, bonus, training, others }]
+}
+```
+
+`attributeIds` é a lista de associações atuais. `attributeId` guarda o primeiro ID para compatibilidade com backups antigos.
+
+### 4.1 Estado padrão (primeiro acesso)
+
+Personagem de exemplo **Aelric Vale**, Bárbaro nível 3, HP 24/30, Sanidade 12/20, Esforço 4/8, atributos Força 16, Intelecto 9, Presença 10, Agilidade 12 e Vigor 15; inventário com "Poção de cura" ×2 e "Mapa antigo" ×1; Arsenal inicialmente vazio; perícias iniciais com associações editáveis; uma rolagem `d20 = 15`; uma entrada de diário "Primeira entrada" com `#Combate` e `#Quest`. A intenção é a página nunca abrir vazia e já demonstrar cada recurso. Esse exemplo (`defaultState`) aparece **só no primeiro acesso**, quando não há nada salvo (ou quando o que está salvo está corrompido, ou o armazenamento está bloqueado).
+
+### 4.2 Valores neutros (`emptyState`)
+
+Quando os dados carregados ou um backup importado **não têm** alguma parte, essa parte é completada com valores neutros, e não com o exemplo: personagem sem nome, sem classe e sem anotações; nível 1; barras **cheias** com os máximos padrão (HP 30/30, Sanidade 20/20, Esforço 8/8); os cinco atributos-base com valor 10; inventário, Arsenal, histórico, diário e relações vazios; perícias iniciais sem bônus e com associações-base; tema `field`; atributos visíveis.
+
+### 4.3 IDs
+
+`generateId()` usa `crypto.randomUUID()` quando disponível; senão monta `id-<timestamp>-<aleatório hex>`.
+
+---
+
+## 5. Fluxo da aplicação
+
+```
+carrega script.js (no fim do <body>)
+  └─ state = loadState()
+        ├─ não há nada salvo     → cópia de defaultState
+        ├─ há JSON válido        → normalizeState(JSON salvo)
+        ├─ JSON corrompido       → aviso no console + defaultState
+        └─ armazenamento bloqueado → aviso único no console + defaultState (só em memória)
+  └─ init()
+        ├─ bind* (registra todos os eventos)
+        └─ renderAll()
+```
+
+Padrão usado em toda a aplicação — **evento → altera `state` → `saveState()` → render da área afetada**:
+
+| Função de render | O que desenha |
+|---|---|
+| `renderTheme` | `data-theme` do body e texto do botão de tema |
+| `renderCharacterBlock` | nome, classe, nível, anotações |
+| `renderAttributes` | lista de atributos editáveis e visibilidade da grade |
+| `renderHp` / `renderSanity` / `renderEffort` | largura da barra, número atual, máximo, mensagem de status |
+| `renderSkills` | opções de atributo e tabela de perícias |
+| `renderInventory` | desenha a lista de itens |
+| `bindInventoryList` | trata edição e remoção via delegação de eventos |
+| `renderRelationships` | desenha as relações e suas afinidades; `bindRelationshipsList` trata edição e remoção |
+| `renderDiceHistory` | histórico de rolagens + "Última rolagem" |
+| `renderJournal` | reconstrói o `<select>` de tags, aplica filtros e desenha as entradas |
+
+Não há framework reativo: o redesenho é manual, por bloco, geralmente limpando `innerHTML` e recriando a lista.
+
+**Campos numéricos:** valores válidos são persistidos automaticamente; campos vazios/temporariamente inválidos preservam o último valor válido. Ao digitar um máximo, a barra mostra uma prévia, mas o estado salvo só muda ao confirmar o campo (`change`).
+
+**Armazenamento:** `saveState` e `loadState` usam `try/catch`. Se o `localStorage` estiver bloqueado ou cheio, o site continua funcionando em memória e mostra **um único** `console.warn`, sugerindo usar "Exportar Backup". Se a leitura falhar ou os dados salvos não puderem ser interpretados, o conteúdo existente não é sobrescrito automaticamente; a sessão usa o estado padrão em memória.
+
+---
+
+## 6. Regras de negócio por funcionalidade
+
+### 6.1 Ficha
+- Nome, classe e anotações são salvos a cada tecla (`input`).
+- Nível: enquanto a pessoa digita, só valores válidos são salvos, e o campo pode ficar vazio. Ao sair do campo, o nível fica entre **1 e 99**; vazio ou inválido vira 1.
+- Atributos: cada atributo tem ID estável, nome e valor numérico; nomes e valores são editáveis, novos atributos podem ser adicionados e os IDs não mudam ao renomear. Não há limites numéricos de sistema impostos pelo app.
+- Botão Ocultar/Mostrar: esconde ou mostra a grade de atributos (classe `.hidden`) e salva a preferência em `state.attributesHidden`.
+
+### 6.2 Perícias
+- `state.skills` começa com a lista de perícias sugerida, mas cada linha pode ser renomeada ou removida e novas perícias podem ser adicionadas.
+- Um ou mais atributos são associados por IDs estáveis, de modo que renomear um atributo atualiza o nome mostrado na tabela sem perder a associação. A lista é editável; referências a IDs inexistentes são removidas na normalização.
+- Bônus é numérico; Treino e Outros são texto livre para acomodar diferentes sistemas. Não há cálculo automático de testes.
+- A remoção pede confirmação. Alterações são salvas e entram nos backups; backup legado sem `skills` recebe a lista inicial. Nomes são deduplicados ignorando caixa e espaços excedentes; na consolidação ficam o primeiro ID, as associações unidas, campos textuais preenchidos/combinados, dados originais de duplicatas em `duplicateRecords` e bônus alternativos em `duplicateBonuses`.
+- As perícias iniciais incluem Mitologia (Intelecto) e Magia Divina (Vigor), além de associações simples e múltiplas editáveis.
+
+### 6.3 Barras vitais (HP, Sanidade, Esforço)
+- Botões somam/subtraem e o resultado é limitado a `0 ≤ atual ≤ máximo`.
+- Atual e máximo podem ser editados diretamente na Ficha de Campo. A barra acompanha a prévia do máximo enquanto ele é digitado, sem persistir estados intermediários. Um máximo final válido deve ser maior que zero; zero pode aparecer durante a edição e, ao confirmar, é restaurado ao último máximo válido.
+- Ao confirmar um máximo menor, o atual é reduzido para não ultrapassá-lo. Campos vazios ou inválidos preservam o último valor válido.
+- Porcentagem = `atual / máximo`, limitada a 0–100%, vira a largura da barra.
+- Três estados, com mensagens próprias para cada barra:
+
+| Condição | Classe | Exemplo (HP) |
+|---|---|---|
+| atual ≤ 0 | `critical` (vermelho) | "HP zerado. O personagem caiu e precisa de atenção imediata." |
+| < 25% | `warning` (amarelo) | "HP crítico! O personagem está em risco iminente." |
+| restante | `safe` (verde) | "HP está estável." |
+
+- Cores: HP usa gradiente verde→amarelo→vermelho (variável do tema); Sanidade, gradiente roxo; Esforço, gradiente laranja/âmbar.
+
+### 6.4 Inventário
+- **Adicionar**: item novo entra no **topo** da lista (`unshift`). Nome vazio é rejeitado (foco volta ao campo). Quantidade mínima 1.
+- **Editar**: "Editar" copia o item para o formulário, guarda o ID no campo oculto, troca o botão para "Salvar alterações" e mostra "Cancelar edição". Ao enviar, substitui o item com o mesmo ID.
+- **Remover**: imediato, sem confirmação. Se o item removido é o que está sendo editado, o formulário sai do modo de edição e é limpo (mesmo efeito de "Cancelar edição").
+- Lista vazia mostra: "Nenhum item no inventário. Adicione o primeiro item."
+- No Diário Manuscrito, a lista oculta as descrições e exibe nome e quantidade; descrições continuam no estado e no backup.
+
+### 6.4.1 Arsenal
+- `state.arsenal` guarda armas separadamente de `state.inventory`, com ID, nome, quantidade, dano e descrição.
+- Nome e dano são obrigatórios; quantidade deve ser um inteiro positivo. A expressão de dano é armazenada como texto, sem cálculo ou interpretação.
+- Editar carrega os dados existentes e salva com o mesmo ID; cancelar descarta a edição. Remover pede confirmação.
+- O cadastro, a edição e a remoção salvam a lista compartilhada e redesenham as duas apresentações. No Diário Manuscrito, a descrição é omitida dos cartões, mas permanece carregada no formulário de edição e no estado.
+- Backups anteriores sem `arsenal` continuam válidos e recebem uma lista vazia, mantendo o Inventário existente.
+
+### 6.5 Relações
+- Relações só aparecem no Diário Manuscrito e são armazenadas em `state.relationships`.
+- Nome e identificação são obrigatórios; descrição é opcional.
+- `bondType` separa afinidade comum de romântica; `affinityType` representa a polaridade positiva ou negativa. A intensidade é um inteiro de 1 a 3.
+- Afinidades comuns usam bolinhas brancas (positiva) ou vermelhas (negativa); vínculos românticos usam corações rosas (positivo) ou vermelhos (negativo). Prévia e tabela mantêm rótulos acessíveis com tipo, polaridade e intensidade.
+- A prévia troca ícones, cores e rótulos de intensidade imediatamente ao alterar o tipo, polaridade ou nível. A tabela chama a coluna de "Vínculo" e inclui uma legenda das quatro combinações.
+- Adicionar e editar salvam e atualizam a tabela; remover solicita confirmação. Em telas estreitas, cada linha da tabela vira um cartão com rótulos.
+- Registros anteriores sem `bondType` são migrados como afinidade comum, preservando polaridade, intensidade, nomes, identificações e descrições. Backups antigos sem `relationships` continuam válidos; a propriedade é completada como lista vazia.
+
+### 6.6 Rolador de dados
+- `Math.floor(Math.random() * lados) + 1`.
+- Resultado no formato `"d20 = 15"` com lados, valor e timestamp; entra no topo; o histórico guarda **as 12 últimas**.
+- O histórico apresenta Dado, Resultado e Data e horário; a rolagem mais recente recebe destaque. Registros antigos no formato `"d20 = 15"` são interpretados para compor as colunas.
+- Datas no formato curto `pt-BR` (`Intl.DateTimeFormat`, ex.: `20/11/2026 14:32`).
+- "Limpar histórico" esvazia a lista e volta "Última rolagem" para "Nenhuma". O próprio `renderDiceHistory` também mostra "Nenhuma" sempre que o histórico estiver vazio (por exemplo, depois de importar um backup sem rolagens).
+
+### 6.7 Diário psicológico
+- Título e descrição do acontecimento obrigatórios. Entradas novas no topo; data e horário são registrados automaticamente.
+- Tags (`normalizeTags`): separa por vírgula, tira espaços, adiciona `#` se faltar, remove espaços internos, elimina duplicadas, **máximo 6 tags**. Ex.: `"combate, #NPC, lore antigo"` → `["#combate", "#NPC", "#loreantigo"]`.
+- Emoção predominante, intensidade de 1 a 5 e os campos de reflexão são opcionais. A emoção "Outra" permite informar uma descrição livre. A reflexão fica recolhida por padrão para manter o formulário leve.
+- As entradas guardam oito respostas opcionais (pensamentos, sentimentos, medos, desejos/necessidades, conflito interno, relações, aprendizado e visão de mundo). Campos vazios são preservados como vazios; registros antigos recebem valores neutros ao serem normalizados.
+- Cada registro apresenta título, data, tags (quando houver), acontecimento, estado emocional e reflexões preenchidas. Emoção e intensidade recebem destaque visual; blocos opcionais vazios não são renderizados.
+- A busca considera título, descrição, tags, emoção e reflexão.
+- O `<select>` de tags é reconstruído a cada render com todas as tags existentes, em ordem alfabética, preservando a seleção atual se ainda existir.
+- Filtro: a entrada aparece se (busca vazia **ou** termo aparece no título/conteúdo/tags/emoção/reflexão, sem diferenciar maiúsculas) **e** (filtro "Todas" **ou** a entrada tem a tag escolhida, comparação exata).
+- Conteúdo exibido com `white-space: pre-wrap` (mantém quebras de linha).
+- Não há como editar ou excluir entradas do diário.
+
+### 6.8 Temas
+- Botão alterna `field` ↔ `journal`, grava em `state.theme` e atualiza `body[data-theme]`. O texto do botão mostra **o tema para o qual vai mudar**.
+- Além do visual, o CSS **esconde painéis** conforme o tema:
+  - **Ficha de Campo** (`field`): esconde o **Diário Psicológico** e **Relações**; mostra atributos, perícias, Arsenal e rolador.
+  - **Diário Manuscrito** (`journal`): esconde o **Rolador de Dados**, as **Perícias** e os **Atributos**; mostra o Arsenal em cartões resumidos, relações e as barras vitais como cartões com valores compartilhados. As descrições do Inventário e Arsenal não aparecem nas listagens, mas continuam armazenadas.
+
+  Essa separação mantém as ferramentas técnicas no modo de ficha e prioriza personagem, inventário, relações e narrativa no modo manuscrito.
+
+### 6.9 Backup
+- **Exportar**: serializa todo o objeto `state` com indentação, incluindo ficha, atributos, perícias, barras vitais, inventário, Arsenal, histórico de rolagens, diário, relações e quaisquer campos adicionais, cria um `Blob` e força o download de `chronicles-sheet-backup-AAAA-MM-DD-HH-MM-SS.json`. Campos adicionais preservados no estado também entram no JSON.
+- **Importar**: lê o arquivo, faz `JSON.parse` e valida a estrutura e os campos conhecidos antes de normalizar ou alterar o estado. Exige um objeto de backup com `character` ou ao menos uma das listas `inventory`, `arsenal`, `journal`, `diceHistory`, `relationships` ou `skills`; valida tipos e registros dessas estruturas (incluindo quantidade positiva inteira e expressão de dano não vazia para cada arma) e recusa JSON malformado ou incompatível. Depois da validação, `normalizeState` prepara o novo estado, completando campos ausentes, e só então ele substitui o atual. Campos adicionais desconhecidos são preservados para compatibilidade futura. A importação é atômica quanto à validação: em caso de erro, os dados e formulários atuais permanecem intactos, uma mensagem explica o problema e o input é limpo para permitir nova tentativa. Após uma importação válida, os formulários são limpos e a tela é redesenhada. Se o armazenamento falhar, o backup ainda é aplicado à sessão e uma mensagem informa que ele não foi persistido.
+- Backups exportados por versões anteriores (sem `attributesHidden`, sem `sanity`/`effort` ou sem `relationships[].bondType`) continuam importando. Relações antigas sem tipo viram afinidade comum; backups parciais (ex.: só `journal`) também são aceitos. Em todos os casos, o que falta recebe os **valores neutros** (ver 4.2), nunca o personagem de exemplo.
+
+### 6.10 Normalização e segurança
+`normalizeState` é usado ao carregar do `localStorage` e ao importar:
+- Entrada que não é objeto (array, número, `null`) é tratada como `{}`.
+- Faz *deep merge* sobre uma cópia de `emptyState` (valores neutros, ver 4.2): chaves que faltam são completadas e arrays recebidos substituem os padrões. Listas ausentes/inválidas ficam vazias, exceto `skills`, que recebe a lista inicial sugerida.
+- **Personagem**: `name`, `className` e `notes` viram texto; `level` fica entre 1 e 99. Atributos dinâmicos mantêm nome/ID e aceitam qualquer valor numérico finito.
+- **Atributos**: mapas legados como `{ forca: 16, ... }` viram itens com IDs estáveis e nomes editáveis. Na migração versionada, os seis atributos antigos são mapeados para Força, Intelecto, Presença, Agilidade e Vigor; Sabedoria é removida; nomes personalizados e valores são preservados. Listas atuais preservam IDs; entradas incompletas são descartadas.
+- **skills**: descarta perícias sem nome; normaliza bônus numérico e associações múltiplas para IDs de atributos existentes; Treino e Outros viram texto. Dados legados sem versão recebem as associações-base quando não havia associação salva, Mitologia e Magia Divina são incluídas uma vez, e duplicatas de nome são consolidadas.
+- **Barras vitais**: `hp`, `sanity` e `effort` ausentes, `null` ou inválidos ficam cheios com o máximo padrão; `max ≥ 1` e `0 ≤ current ≤ max` (`current` inválido vira o máximo).
+- **inventory**: descarta itens sem `name`; `quantity` vira número ≥ 1; `description` vira texto.
+- **arsenal**: descarta armas sem nome, quantidade inteira positiva ou expressão de dano; normaliza nome e expressão como texto e descrição como texto opcional.
+- **diceHistory**: descarta entradas sem `result` em texto; no máximo 12.
+- **journal**: descarta entradas sem `title` ou `content`; `tags` vira sempre um array de textos (texto solto passa por `normalizeTags`).
+- **relationships**: descarta relações sem nome ou identificação; tipo de vínculo inválido ou ausente vira `common`; polaridade é normalizada para positiva/negativa e intensidade para inteiro de 1 a 3; descrição ausente vira texto vazio.
+- **diceHistory**: campos `sides` e `value` ausentes são recuperados do formato legado `"d20 = 15"` quando possível.
+- **IDs** ausentes ou repetidos são gerados de novo; **timestamps** inválidos viram `null` (exibidos como "Sem data", em vez de quebrar o `formatDate`).
+- `theme` inválido volta para `field`; `attributesHidden` que não seja booleano vira `false`.
+- Campos extras desconhecidos nos itens são preservados.
+
+`escapeHtml` é usado em todo texto do usuário inserido via `innerHTML` (nomes, descrições, tags, títulos, conteúdo, `data-id` e `value` das opções), evitando injeção de HTML.
+
+---
+
+## 7. Estilo e temas (styles.css)
+
+### 7.1 Sistema de variáveis
+Todas as cores vêm de variáveis em `:root` (tema **field**), redefinidas em `body[data-theme='journal']`. Principais tokens: `--bg`, `--panel`, `--primary`, `--accent`, `--text`, `--muted`, `--danger`, `--success`, `--warning`, `--border`, `--hp-fill`, `--input-bg`, `--button-text`.
+
+| | Ficha de Campo (`field`) | Diário Manuscrito (`journal`) |
+|---|---|---|
+| Estética | técnica, escura, moderna | pergaminho antigo / fantasia |
+| Fundo | azul-marinho com brilho radial roxo | marrom com padrão SVG de quadradinhos dourados bem discretos, por cima do gradiente |
+| Primária / acento | roxo `#8b5cf6` / ciano `#22d3ee` | bronze `#9a6a30` / dourado `#d4a15c` |
+| Fonte | Segoe UI (sans-serif) | Georgia (serifada) |
+
+### 7.2 Layout
+- Container de até 1200px; grid de 12 colunas; painéis ocupam 6 colunas (dois por linha), diário ocupa a linha toda.
+- Inventário: formulário em cima e lista embaixo, em qualquer largura (o painel tem no máximo ~550px, e duas colunas lado a lado não cabiam).
+- Arsenal: formulário em cima e tabela abaixo; em telas estreitas, as linhas viram cartões rotulados sem rolagem horizontal.
+- Cartões com cantos arredondados, sombra e `backdrop-filter: blur` (efeito vidro).
+- Botões sobem 1px no hover; barras animam a largura.
+
+### 7.3 Responsividade
+- **≤ 900px**: cada painel ocupa a largura toda.
+- **≤ 640px**: topo em coluna; botões do topo em largura total; ficha, filtros e atributos em 1 coluna; dados em 2 colunas.
+
+### 7.4 Outros
+- Classe utilitária `.hidden` (`display: none !important`).
+- `.empty-state` para listas vazias (borda tracejada).
+- Barra de rolagem customizada (WebKit).
+- Usa `color-mix()` no fundo do tema field, com fallback via `@supports` para navegadores sem suporte (cor já calculada `rgb(12, 18, 34)`).
+- Fallbacks para navegadores antigos: `-webkit-backdrop-filter`, `top/right/bottom/left` antes de `inset`, valores fixos antes de `min()` e `clamp()`.
+- O SVG de fundo é uma data URI codificada no padrão (`charset=utf-8`, `%3C`/`%3E`).
+
+---
+
+## 8. Requisitos do prompt × implementação
+
+| Requisito (TEXTOS SCRIPT JOGO.txt) | Situação |
+|---|---|
+| HTML/CSS/JS separados, sem frameworks | ✅ Atendido |
+| Persistência em `localStorage` | ✅ Atendido (com aviso e funcionamento em memória se o armazenamento estiver bloqueado) |
+| Exportar/importar `.json` | ✅ Atendido |
+| Nome, classe, nível, anotações editáveis | ✅ Atendido |
+| Atributos dinâmicos e editáveis | ✅ Atendido (nome e valor salvos, IDs estáveis e incluídos no backup) |
+| Gerenciamento de perícias | ✅ Atendido (adicionar, editar, remover e associar atributos; incluídas no backup) |
+| Barras de HP, Sanidade e Esforço editáveis | ✅ Atendido (valores atual/máximo, validação e estado compartilhado entre temas) |
+| HP com barra e botões ±1/±5 | ✅ Atendido |
+| Alerta de HP crítico (< 25% ou 0) | ✅ Atendido, com dois níveis (aviso e crítico) |
+| Inventário: adicionar/editar/remover, nome/qtd/descrição | ✅ Atendido |
+| Dados d4–d100 | ✅ Atendido |
+| Histórico com timestamp | ✅ Atendido (12 últimas) |
+| Diário com tags e filtro por tag/palavra-chave | ✅ Atendido |
+| Alternância "Ficha de Campo" / "Diário Manuscrito" | ✅ Atendido (e também esconde painéis) |
+| **Extras** não pedidos | Sanidade, Esforço, limpar histórico de dados, botão "Ocultar" atributos |
+
+---
+
+## 9. Pontos incompletos, inconsistências e riscos
+
+Encontrados na análise do código original e nas revisões seguintes. Cada item está marcado como **✅ Resolvido** (com uma linha sobre como) ou **⏳ Pendente**.
+
+### 9.1 Funcionalidades incompletas
+1. ✅ **Atributos não estavam ligados ao JavaScript.** A tela sempre mostrava 10 e as alterações não eram salvas.
+   *Resolvido:* `bindAttributeInputs` e `renderAttributes` ligam os campos a `state.character.attributes`; nomes e valores são editáveis, os IDs permanecem estáveis ao renomear e os valores entram no backup.
+2. ✅ **O botão "Ocultar" atributos não fazia nada.**
+   *Resolvido:* `bindAttributesToggle` alterna a classe `.hidden` na grade e o texto "Ocultar"/"Mostrar", e salva a preferência em `state.attributesHidden`.
+3. ✅ **CSS sem uso** (`.attribute-name-row`, `.attribute-name-input`, `.remove-attribute-btn`, `.attributes-area`, `.add-attribute-btn`), restos de um recurso de atributos personalizados não terminado.
+   *Resolvido:* as classes foram apagadas do `styles.css`.
+   ✅ *Também resolvido:* o botão "Ocultar" ficava embaixo do título "Atributos", porque `.attributes-header` não tinha estilo. Agora `.attributes-header` entra na mesma regra de `.hp-header` (título à esquerda, controle à direita), sem cores, fontes ou tamanhos novos. Conferido nos dois temas, em 900px e 640px.
+   ⏳ *Pendente:* `.attributes-section` continua sem estilo, então o cabeçalho "Atributos" fica colado na caixa "Esforço está estável.", sem o espaço e a linha que separam as barras (`.vital-bar-item`).
+4. ⏳ **Diário sem edição/exclusão** de entradas.
+
+### 9.2 Comportamentos estranhos
+5. ✅ **Diminuir o máximo não ajustava o atual** ("24 / 10").
+   *Resolvido:* no `change` do campo de máximo, o atual é reduzido para `≤ máximo`; `normalizeState` também garante isso nos dados carregados.
+6. ✅ **O campo Nível virava "1" ao ser apagado**, e não havia limite de 99 no JS.
+   *Resolvido:* o `input` só salva valores válidos sem reescrever o campo; o `change` aplica o limite de 1 a 99. A mesma correção vale para os campos de máximo.
+7. ✅ **Visibilidade dos painéis por tema.** A Ficha de Campo esconde visualmente diário e relações sem apagar dados; o Diário Manuscrito continua apresentando suas funcionalidades.
+8. ✅ **`journalList` não era declarado** no JS.
+   *Resolvido:* declarado com `getElementById`, como os outros elementos.
+
+### 9.3 Robustez do import e do armazenamento
+9. ✅ **`normalizeState` não validava cada item** das listas; uma entrada de diário sem `tags` quebrava o filtro.
+   *Resolvido:* cada item de `inventory`, `arsenal`, `diceHistory` e `journal` é validado e os inválidos são descartados; `sanity`/`effort` nulos são recuperados; IDs e datas também são validados (ver 6.8).
+10. ✅ **O `data-id` do inventário entrava sem escape.**
+    *Resolvido:* agora passa por `escapeHtml`.
+11. ✅ **Redundâncias**: `escapeAttribute` duplicava `escapeHtml`; `sanity`/`effort` nulos davam erro.
+    *Resolvido:* `escapeAttribute` foi removido; as três barras são recuperadas pelo mesmo laço.
+12. ✅ **Importar qualquer JSON válido (ex.: `{}`) apagava os dados**, trocando tudo pelo personagem de exemplo, e mostrava "sucesso".
+    *Resolvido:* `looksLikeBackup` recusa arquivos sem `character` e sem nenhuma das listas; aparece "Arquivo inválido..." e nada muda.
+    ✅ *Também resolvido:* um backup que tenha só parte dos dados (ex.: só `journal`) recebia os dados de exemplo no que faltava. Agora `normalizeState` completa com `emptyState` (valores neutros, ver 4.2); o exemplo aparece só no primeiro acesso.
+13. ✅ **Remover o item em edição fazia perder o que estava sendo digitado.** O formulário ficava em modo edição e o "Salvar" não salvava nada.
+    *Resolvido:* ao remover o item que está sendo editado, o formulário sai do modo de edição (`clearInventoryForm`).
+    ✅ *Também resolvido:* importar um backup no meio de uma edição tinha o mesmo efeito. Depois de uma importação bem-sucedida, os formulários de inventário, atributos, perícias e diário são limpos; uma importação recusada não os altera.
+14. ✅ **Com o `localStorage` bloqueado ou cheio, o site travava.**
+    *Resolvido:* leitura e gravação estão em `try/catch`; o site funciona só em memória e mostra um único `console.warn` sugerindo "Exportar Backup".
+15. ✅ **"Última rolagem" mostrava uma rolagem antiga** depois de importar um backup sem histórico de dados, porque `renderDiceHistory` saía antes de atualizar o texto quando a lista estava vazia.
+    *Resolvido:* com o histórico vazio, `renderDiceHistory` também mostra "Nenhuma".
+
+### 9.4 Outros pendentes encontrados na revisão
+16. ⏳ Com uma busca ou um filtro de tag ativo, uma entrada nova do diário pode não aparecer na lista, e parece que não foi salva.
+17. ⏳ Tags com maiúsculas diferentes (`#combate` e `#Combate`) aparecem separadas no filtro, mas a busca por texto ignora maiúsculas.
+18. ⏳ Quantidade, nível, atributos e máximos aceitam números decimais (ex.: 2,5).
+19. ⏳ Com duas abas abertas, a última que salvar sobrescreve as mudanças da outra.
+20. ⏳ O Exportar libera o link do download logo depois do clique, sem colocá-lo na página. Funciona nos navegadores atuais, mas pode falhar em antigos.
+
+### 9.5 CSS e visual
+21. ✅ **O SVG do fundo do tema Diário estava fora do padrão** (`;utf8`, `<`/`>` sem codificar, `fill="transparent"`).
+    *Resolvido:* data URI recodificada; a comparação de pixels confirmou que o resultado é idêntico.
+22. ✅ **O padrão SVG não aparecia**, porque ficava escondido embaixo do gradiente.
+    *Resolvido:* a ordem das camadas foi invertida.
+23. ✅ **Sem `color-mix()`, o fundo do tema field sumia** e a página ficava branca.
+    *Resolvido:* fallback via `@supports` (ver 7.4), junto com outros fallbacks.
+24. ✅ **O inventário transbordava o painel** em telas largas.
+    *Resolvido:* formulário e lista empilhados (ver 7.2).
+
+### 9.6 Detalhes
+- No prompt, "estilo paminho" é um erro de digitação de "pergaminho".
+- Os botões de vital (Sanidade/Esforço) também têm a classe `.hp-btn`; a separação é feita pelo `data-stat`, então funciona, mas os nomes de classe podem confundir.
+- Confirmações e erros de ações aparecem na região acessível `#appStatus`; ela usa `aria-live` e desaparece após alguns segundos.
+- O inventário usa delegação de eventos para manter a renderização separada dos handlers de edição e remoção.
+
+---
+
+## 10. Como executar e publicar
+
+- **Local**: abrir `index.html` no navegador (Chrome, Edge, Firefox ou Safari recentes).
+- **GitHub Pages**: https://professoralissonlucas.github.io/chronicles-sheet/ — publicado a partir da raiz da branch `main`. Não há build.
+- **Resetar dados**: apagar a chave `chronicles-sheet-state-v1` no `localStorage` (DevTools → Application → Local Storage) ou importar um backup.
+- **Armazenamento bloqueado** (algumas janelas anônimas ou configurações de privacidade): o site funciona, mas não guarda nada ao fechar. Use "Exportar Backup".
+
+---
+
+## 11. Glossário
+
+| Termo | Significado |
+|---|---|
+| HP / PV | Pontos de Vida |
+| Sanidade | Estabilidade mental do personagem |
+| Esforço | Recurso gasto em ações especiais |
+| FOR, DES, CON, INT, SAB, CAR | Força, Destreza, Constituição, Inteligência, Sabedoria, Carisma |
+| dX | Dado de X lados (d20 = dado de 20 lados) |
+| Diário Psicológico | Registro narrativo e emocional da campanha |

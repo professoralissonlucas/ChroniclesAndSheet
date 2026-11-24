@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chronicles & Sheet</title>
+    <meta
+      name="description"
+      content="Ficha de personagem, inventário, rolagens de dados e diário psicológico para RPG de mesa."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-theme="field">
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">RPG de mesa</p>
+          <h1>Chronicles & Sheet</h1>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="themeToggle" class="primary-btn" type="button" aria-label="Alternar tema">
+            Modo Diário Manuscrito
+          </button>
+          <button id="exportBtn" class="secondary-btn" type="button">Exportar Backup</button>
+          <label class="secondary-btn file-upload" for="importFile">
+            Importar Backup
+            <input id="importFile" type="file" accept=".json,application/json" />
+          </label>
+        </div>
+      </header>
+
+      <div id="appStatus" class="app-status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+      <main class="layout">
+        <section class="panel" aria-labelledby="characterTitle">
+          <div class="panel-header">
+            <h2 id="characterTitle">
+              <span class="field-only">Ficha Técnica do Personagem</span>
+              <span class="journal-only">Meu Personagem</span>
+            </h2>
+          </div>
+
+          <div class="character-grid">
+            <label class="field character-name-field">
+              <span>Nome</span>
+              <input id="charName" name="name" type="text" placeholder="Nome do aventureiro" />
+            </label>
+
+            <label class="field character-class-field">
+              <span>Classe</span>
+              <input id="charClass" name="class" type="text" placeholder="Classe" />
+            </label>
+
+            <label class="field compact character-level-field">
+              <span><span class="field-only">Nível</span><span class="journal-only">Nível</span></span>
+              <input id="charLevel" name="level" type="number" min="1" max="99" value="1" />
+            </label>
+
+            <label class="field wide character-notes-field">
+              <span>Anotações gerais</span>
+              <textarea id="charNotes" name="notes" rows="4" placeholder="Detalhes da ficha, objetivos, traços..."></textarea>
+            </label>
+          </div>
+
+          <div class="stats-panel">
+            <div class="hp-vital-item">
+              <div class="hp-header">
+                <div>
+                  <h3><span class="field-only">Vida (PV)</span><span class="journal-only">Pontos de Vida</span></h3>
+                </div>
+                <div class="hp-readout">
+                  <strong id="hpCurrentText" class="journal-current-value">0</strong>
+                  <input id="hpCurrentInput" class="stat-current-input" type="number" min="0" step="1" value="24" aria-label="Pontos de vida atuais" />
+                  <span>/</span>
+                  <input id="hpMaxInput" class="stat-max-input" type="number" min="0" step="1" value="30" aria-label="Máximo de pontos de vida" />
+                </div>
+              </div>
+
+              <div class="hp-bar-wrapper">
+                <div id="hpBar" class="hp-bar" role="progressbar" aria-label="Pontos de vida" aria-valuemin="0" aria-valuenow="24" aria-valuemax="30"></div>
+              </div>
+
+              <div class="hp-controls" role="group" aria-label="Ajustar pontos de vida">
+                <button class="hp-btn" data-stat="hp" data-change="-5" type="button" aria-label="Diminuir pontos de vida em 5">-5</button>
+                <button class="hp-btn" data-stat="hp" data-change="-1" type="button" aria-label="Diminuir pontos de vida em 1">-1</button>
+                <button class="hp-btn" data-stat="hp" data-change="1" type="button" aria-label="Aumentar pontos de vida em 1">+1</button>
+                <button class="hp-btn" data-stat="hp" data-change="5" type="button" aria-label="Aumentar pontos de vida em 5">+5</button>
+              </div>
+
+              <div id="hpStatus" class="hp-status safe" aria-live="polite">
+                HP está estável.
+              </div>
+            </div>
+
+            <div class="vital-bars">
+              <div class="vital-bar-item">
+                <div class="hp-header compact-header">
+                  <div>
+                    <h3><span class="field-only">Sanidade (SAN)</span><span class="journal-only">Sanidade</span></h3>
+                  </div>
+                  <div class="hp-readout">
+                    <strong id="sanityCurrentText" class="journal-current-value">0</strong>
+                    <input id="sanityCurrentInput" class="stat-current-input" type="number" min="0" step="1" value="12" aria-label="Sanidade atual" />
+                    <span>/</span>
+                    <input id="sanityMaxInput" class="stat-max-input" type="number" min="0" step="1" value="20" aria-label="Máximo de sanidade" />
+                  </div>
+                </div>
+                <div class="hp-bar-wrapper">
+                  <div id="sanityBar" class="hp-bar sanity-bar" role="progressbar" aria-label="Sanidade" aria-valuemin="0" aria-valuenow="12" aria-valuemax="20"></div>
+                </div>
+
+                <div class="hp-controls" role="group" aria-label="Ajustar sanidade">
+                  <button class="hp-btn vital-btn" data-stat="sanity" data-change="-5" type="button" aria-label="Diminuir sanidade em 5">-5</button>
+                  <button class="hp-btn vital-btn" data-stat="sanity" data-change="-1" type="button" aria-label="Diminuir sanidade em 1">-1</button>
+                  <button class="hp-btn vital-btn" data-stat="sanity" data-change="1" type="button" aria-label="Aumentar sanidade em 1">+1</button>
+                  <button class="hp-btn vital-btn" data-stat="sanity" data-change="5" type="button" aria-label="Aumentar sanidade em 5">+5</button>
+                </div>
+
+                <div id="sanityStatus" class="hp-status safe" aria-live="polite">Sanidade está estável.</div>
+              </div>
+
+              <div class="vital-bar-item">
+                <div class="hp-header compact-header">
+                  <div>
+                    <h3><span class="field-only">Pontos de Esforço (PE)</span><span class="journal-only">Pontos de Esforço</span></h3>
+                  </div>
+                  <div class="hp-readout">
+                    <strong id="effortCurrentText" class="journal-current-value">0</strong>
+                    <input id="effortCurrentInput" class="stat-current-input" type="number" min="0" step="1" value="4" aria-label="Pontos de esforço atuais" />
+                    <span>/</span>
+                    <input id="effortMaxInput" class="stat-max-input" type="number" min="0" step="1" value="8" aria-label="Máximo de pontos de esforço" />
+                  </div>
+                </div>
+                <div class="hp-bar-wrapper">
+                  <div id="effortBar" class="hp-bar effort-bar" role="progressbar" aria-label="Pontos de esforço" aria-valuemin="0" aria-valuenow="4" aria-valuemax="8"></div>
+                </div>
+
+                <div class="hp-controls" role="group" aria-label="Ajustar pontos de esforço">
+                  <button class="hp-btn vital-btn" data-stat="effort" data-change="-5" type="button" aria-label="Diminuir pontos de esforço em 5">-5</button>
+                  <button class="hp-btn vital-btn" data-stat="effort" data-change="-1" type="button" aria-label="Diminuir pontos de esforço em 1">-1</button>
+                  <button class="hp-btn vital-btn" data-stat="effort" data-change="1" type="button" aria-label="Aumentar pontos de esforço em 1">+1</button>
+                  <button class="hp-btn vital-btn" data-stat="effort" data-change="5" type="button" aria-label="Aumentar pontos de esforço em 5">+5</button>
+                </div>
+
+                <div id="effortStatus" class="hp-status safe" aria-live="polite">Esforço está estável.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="attributes-section">
+            <div class="attributes-header">
+              <h3>Atributos</h3>
+              <div class="attribute-controls">
+                <button id="toggleAttributesBtn" class="secondary-btn" type="button" aria-label="Ocultar atributos" aria-controls="attributesGrid" aria-expanded="true">
+                  Ocultar
+                </button>
+                <button id="addAttributeBtn" class="secondary-btn" type="button" aria-controls="attributeForm">Adicionar atributo</button>
+              </div>
+            </div>
+
+            <form id="attributeForm" class="attribute-form" hidden>
+              <label class="field">
+                <span>Nome do atributo <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="attributeNameInput" type="text" required aria-required="true" placeholder="Ex.: Percepção" />
+              </label>
+              <label class="field compact">
+                <span>Valor <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="attributeValueInput" type="number" step="any" value="10" required aria-required="true" />
+              </label>
+              <div class="form-actions">
+                <button class="primary-btn" type="submit">Adicionar</button>
+                <button id="cancelAttributeBtn" class="secondary-btn" type="button">Cancelar</button>
+              </div>
+            </form>
+
+            <div id="attributesGrid" class="attributes-grid" role="group" aria-label="Atributos do personagem" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="panel skills-panel" aria-labelledby="skillsTitle">
+          <div class="panel-header skills-header">
+            <h2 id="skillsTitle">Perícias</h2>
+            <button id="addSkillBtn" class="secondary-btn" type="button" aria-controls="skillForm">Adicionar perícia</button>
+          </div>
+
+          <form id="skillForm" class="skill-form" hidden>
+            <input id="skillIdInput" type="hidden" />
+            <label class="field">
+              <span>Perícia <span class="required-marker" aria-hidden="true">*</span></span>
+              <input id="skillNameInput" type="text" required aria-required="true" placeholder="Nome da perícia" />
+            </label>
+            <label class="field">
+              <span>Dados / Atributo</span>
+              <select id="skillAttributeInput" multiple size="4" aria-describedby="skillAttributeHint"></select>
+              <small id="skillAttributeHint" class="field-hint">Selecione um ou mais atributos (Ctrl/Cmd para múltiplos); deixe sem seleção para não associar.</small>
+            </label>
+            <label class="field compact">
+              <span>Bônus</span>
+              <input id="skillBonusInput" type="number" step="any" value="0" aria-label="Bônus numérico da perícia" />
+            </label>
+            <label class="field compact">
+              <span>Treino</span>
+              <input id="skillTrainingInput" type="text" placeholder="Nível ou descrição" />
+            </label>
+            <label class="field">
+              <span>Outros</span>
+              <input id="skillOthersInput" type="text" placeholder="Modificadores adicionais" />
+            </label>
+            <div class="form-actions wide">
+              <button id="saveSkillBtn" class="primary-btn" type="submit">Salvar perícia</button>
+              <button id="cancelSkillBtn" class="secondary-btn" type="button">Cancelar</button>
+            </div>
+          </form>
+
+          <div class="skills-table-wrap">
+            <table class="skills-table">
+              <caption class="sr-only">Perícias e informações personalizáveis do personagem</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Perícia</th>
+                  <th scope="col">Dados / Atributo</th>
+                  <th scope="col">Bônus</th>
+                  <th scope="col">Treino</th>
+                  <th scope="col">Outros</th>
+                  <th scope="col">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="skillsList" aria-live="polite"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="inventoryTitle">
+          <div class="panel-header">
+            <h2 id="inventoryTitle">Inventário</h2>
+          </div>
+
+          <div class="inventory-layout">
+            <form id="inventoryForm" class="inventory-form">
+              <input type="hidden" id="inventoryId" />
+              <label class="field">
+                <span>Nome do item <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="itemName" type="text" placeholder="Poção de cura" required aria-required="true" />
+              </label>
+
+              <label class="field compact">
+                <span>Quantidade <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="itemQty" type="number" min="1" value="1" required aria-required="true" />
+              </label>
+
+              <label class="field wide field-only">
+                <span>Descrição</span>
+                <textarea id="itemDescription" rows="3" placeholder="Breve descrição do item"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button id="saveItemBtn" class="primary-btn" type="submit">Adicionar item</button>
+                <button id="cancelEditBtn" class="secondary-btn hidden" type="button">Cancelar edição</button>
+              </div>
+            </form>
+
+            <div class="inventory-list-wrap">
+              <ul id="inventoryList" class="inventory-list" aria-live="polite" aria-label="Itens do inventário"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel arsenal-panel" aria-labelledby="arsenalTitle">
+          <div class="panel-header">
+            <h2 id="arsenalTitle">Arsenal</h2>
+          </div>
+
+          <div class="arsenal-layout">
+            <form id="arsenalForm" class="inventory-form arsenal-form">
+              <input type="hidden" id="arsenalId" />
+              <label class="field">
+                <span>Nome da arma <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="weaponName" type="text" required aria-required="true" placeholder="Espada Longa" />
+              </label>
+
+              <label class="field compact">
+                <span>Quantidade <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="weaponQuantity" type="number" min="1" step="1" value="1" required aria-required="true" />
+              </label>
+
+              <label class="field">
+                <span>Dano <span class="required-marker" aria-hidden="true">*</span></span>
+                <input id="weaponDamage" type="text" required aria-required="true" placeholder="1d8 + 2" />
+              </label>
+
+              <label class="field wide field-only">
+                <span>Descrição</span>
+                <textarea id="weaponDescription" rows="3" placeholder="Descrição da arma"></textarea>
+              </label>
+
+              <div class="form-actions wide">
+                <button id="saveWeaponBtn" class="primary-btn" type="submit">Adicionar arma</button>
+                <button id="cancelWeaponEditBtn" class="secondary-btn hidden" type="button">Cancelar edição</button>
+              </div>
+            </form>
+
+            <div class="arsenal-field-view">
+              <div class="arsenal-table-wrap">
+                <table class="arsenal-table">
+                  <caption class="sr-only">Armas do personagem, dano, quantidade e descrição</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Arma</th>
+                      <th scope="col">Dano</th>
+                      <th scope="col">Quantidade</th>
+                      <th class="field-only" scope="col">Descrição</th>
+                      <th scope="col">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="arsenalList" aria-live="polite"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="arsenal-journal-view">
+              <ul id="journalArsenalList" class="journal-arsenal-list" aria-live="polite" aria-label="Armas do personagem"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel relationships-panel" aria-labelledby="relationshipsTitle">
+          <div class="panel-header">
+            <h2 id="relationshipsTitle">Relações</h2>
+          </div>
+
+          <form id="relationshipForm" class="relationship-form">
+            <input id="relationshipId" type="hidden" />
+            <label class="field">
+              <span>Nome <span class="required-marker" aria-hidden="true">*</span></span>
+              <input id="relationshipName" type="text" required aria-required="true" placeholder="Nome do personagem" />
+            </label>
+            <label class="field">
+              <span>Identificação <span class="required-marker" aria-hidden="true">*</span></span>
+              <input id="relationshipIdentification" type="text" required aria-required="true" placeholder="Mentor, aliada, rival..." />
+            </label>
+            <label class="field wide">
+              <span>Descrição</span>
+              <textarea id="relationshipDescription" rows="2" placeholder="Como essa pessoa se relaciona com o protagonista?"></textarea>
+            </label>
+
+            <fieldset class="relationship-affinity wide">
+              <legend>Vínculo</legend>
+              <label class="field compact">
+                <span>Tipo de vínculo</span>
+                <select id="relationshipBondType">
+                  <option value="common">Afinidade comum</option>
+                  <option value="romantic">Romântica</option>
+                </select>
+              </label>
+              <div class="affinity-polarity">
+                <span>Polaridade</span>
+                <div class="affinity-types" role="group" aria-label="Polaridade do vínculo">
+                  <label class="affinity-choice">
+                    <input type="radio" name="relationshipAffinity" value="positive" checked />
+                    <span class="affinity-color common positive" aria-hidden="true"></span>
+                    <span>Positiva</span>
+                  </label>
+                  <label class="affinity-choice">
+                    <input type="radio" name="relationshipAffinity" value="negative" />
+                    <span class="affinity-color common negative" aria-hidden="true"></span>
+                    <span>Negativa</span>
+                  </label>
+                </div>
+              </div>
+              <label class="field compact">
+                <span>Intensidade</span>
+                <select id="relationshipAffinityLevel">
+                  <option value="1">1 bolinha</option>
+                  <option value="2">2 bolinhas</option>
+                  <option value="3">3 bolinhas</option>
+                </select>
+              </label>
+              <div class="relationship-preview">
+                <span>Prévia do vínculo</span>
+                <output id="relationshipAffinityPreview" class="affinity-preview" aria-live="polite" aria-label="Prévia da afinidade"></output>
+              </div>
+            </fieldset>
+
+            <div class="relationship-form-actions wide">
+              <button id="saveRelationshipBtn" class="primary-btn" type="submit">Adicionar relação</button>
+              <button id="cancelRelationshipEditBtn" class="secondary-btn hidden" type="button">Cancelar edição</button>
+            </div>
+          </form>
+
+          <div class="relationships-table-wrap">
+            <table class="relationships-table">
+              <caption class="sr-only">Relações do protagonista com outros personagens</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Nome</th>
+                  <th scope="col">Identificação</th>
+                  <th scope="col">Vínculo</th>
+                  <th scope="col">Descrição</th>
+                  <th scope="col">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="relationshipsList" aria-live="polite"></tbody>
+            </table>
+          </div>
+
+          <div class="relationship-legend" role="note" aria-label="Legenda dos tipos de vínculo">
+            <span class="relationship-legend-item">
+              <span class="affinity-legend-mark common positive" aria-hidden="true">●●●</span>
+              <span>Bolinhas brancas: afinidade positiva</span>
+            </span>
+            <span class="relationship-legend-item">
+              <span class="affinity-legend-mark common negative" aria-hidden="true">●●●</span>
+              <span>Bolinhas vermelhas: afinidade negativa</span>
+            </span>
+            <span class="relationship-legend-item">
+              <span class="affinity-legend-mark romantic positive" aria-hidden="true">♥♥♥</span>
+              <span>Corações rosas: romântica positiva</span>
+            </span>
+            <span class="relationship-legend-item">
+              <span class="affinity-legend-mark romantic negative" aria-hidden="true">♥♥♥</span>
+              <span>Corações vermelhos: romântica negativa</span>
+            </span>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="diceTitle">
+          <div class="panel-header">
+            <h2 id="diceTitle">Rolador de Dados</h2>
+          </div>
+
+          <div class="dice-grid" role="group" aria-label="Escolher dado para rolar">
+            <button class="dice-btn" type="button" data-sides="4" aria-label="Rolar dado de 4 lados">d4</button>
+            <button class="dice-btn" type="button" data-sides="6" aria-label="Rolar dado de 6 lados">d6</button>
+            <button class="dice-btn" type="button" data-sides="8" aria-label="Rolar dado de 8 lados">d8</button>
+            <button class="dice-btn" type="button" data-sides="10" aria-label="Rolar dado de 10 lados">d10</button>
+            <button class="dice-btn" type="button" data-sides="12" aria-label="Rolar dado de 12 lados">d12</button>
+            <button class="dice-btn" type="button" data-sides="20" aria-label="Rolar dado de 20 lados">d20</button>
+            <button class="dice-btn" type="button" data-sides="100" aria-label="Rolar dado de 100 lados">d100</button>
+          </div>
+
+          <div class="dice-actions">
+            <div class="dice-output">
+              <span>Última rolagem:</span>
+              <strong id="lastRoll">Nenhuma</strong>
+            </div>
+            <button id="clearDiceHistoryBtn" class="secondary-btn clear-dice-btn" type="button">Limpar histórico</button>
+          </div>
+
+          <h3 id="rollHistoryTitle" class="roll-history-title">Histórico de Rolagens</h3>
+          <div class="dice-history-wrap">
+            <table class="dice-history-table">
+              <caption class="sr-only">Dado, resultado e data e horário das rolagens recentes</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Dado</th>
+                  <th scope="col">Resultado</th>
+                  <th scope="col">Data e horário</th>
+                </tr>
+              </thead>
+              <tbody id="diceHistory" aria-live="polite"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel journal-panel" aria-labelledby="journalTitle">
+          <div class="panel-header">
+            <h2 id="journalTitle">Diário Psicológico</h2>
+          </div>
+
+          <form id="journalForm" class="journal-form">
+            <label class="field">
+              <span>Título do registro <span class="required-marker" aria-hidden="true">*</span></span>
+              <input id="journalTitleInput" type="text" placeholder="Ex: Encontro na Ponte Quebrada" required aria-required="true" />
+            </label>
+
+            <label class="field">
+              <span>Tags personalizadas</span>
+              <input id="journalTagsInput" type="text" placeholder="#Combate, #Quest, #NPC" />
+            </label>
+
+            <label class="field">
+              <span>Descrição do acontecimento <span class="required-marker" aria-hidden="true">*</span></span>
+              <textarea id="journalContent" rows="5" placeholder="Descreva o evento, a sensação, o contexto e as consequências..." required aria-required="true"></textarea>
+            </label>
+
+            <p class="journal-form-hint">A data e o horário serão registrados automaticamente ao salvar.</p>
+
+            <fieldset class="journal-emotions">
+              <legend>Estado emocional (opcional)</legend>
+              <label class="field">
+                <span>Emoção predominante</span>
+                <select id="journalEmotion" aria-controls="journalEmotionOtherField">
+                  <option value="">Não informado</option>
+                  <option value="Alegria">Alegria</option>
+                  <option value="Tristeza">Tristeza</option>
+                  <option value="Medo">Medo</option>
+                  <option value="Raiva">Raiva</option>
+                  <option value="Culpa">Culpa</option>
+                  <option value="Vergonha">Vergonha</option>
+                  <option value="Esperança">Esperança</option>
+                  <option value="Confusão">Confusão</option>
+                  <option value="Ansiedade">Ansiedade</option>
+                  <option value="Alívio">Alívio</option>
+                  <option value="Solidão">Solidão</option>
+                  <option value="Determinação">Determinação</option>
+                  <option value="Outra">Outra</option>
+                </select>
+              </label>
+              <label id="journalEmotionOtherField" class="field hidden">
+                <span>Outra emoção (opcional)</span>
+                <input id="journalEmotionOther" type="text" placeholder="Descreva a emoção" autocomplete="off" />
+              </label>
+              <label class="field compact">
+                <span>Intensidade (1 a 5)</span>
+                <select id="journalEmotionIntensity" aria-label="Intensidade emocional, de 1 a 5">
+                  <option value="">Não informado</option>
+                  <option value="1">1 — Leve</option>
+                  <option value="2">2</option>
+                  <option value="3">3 — Moderada</option>
+                  <option value="4">4</option>
+                  <option value="5">5 — Muito intensa</option>
+                </select>
+              </label>
+            </fieldset>
+
+            <details class="journal-reflection">
+              <summary>Reflexão psicológica (opcional)</summary>
+              <div class="journal-reflection-fields">
+                <label class="field">
+                  <span>O que meu personagem está pensando?</span>
+                  <textarea id="journalThoughts" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>O que ele realmente sente sobre o acontecimento?</span>
+                  <textarea id="journalFeelings" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>Quais são seus maiores medos neste momento?</span>
+                  <textarea id="journalFears" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>O que ele deseja ou precisa?</span>
+                  <textarea id="journalDesires" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>Existe algum conflito interno?</span>
+                  <textarea id="journalInnerConflict" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>Como esse acontecimento afetou suas relações com outros personagens?</span>
+                  <textarea id="journalRelationships" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>O que ele aprendeu ou percebeu com essa experiência?</span>
+                  <textarea id="journalLearning" rows="2"></textarea>
+                </label>
+                <label class="field">
+                  <span>O que mudou em sua maneira de enxergar o mundo?</span>
+                  <textarea id="journalWorldview" rows="2"></textarea>
+                </label>
+              </div>
+            </details>
+
+            <button class="primary-btn" type="submit">Salvar evento</button>
+          </form>
+
+          <div class="journal-filters">
+            <label class="field">
+              <span>Buscar por palavra-chave</span>
+              <input id="journalSearch" type="search" placeholder="Procure por texto ou tag" />
+            </label>
+
+            <label class="field">
+              <span>Filtrar por tag</span>
+              <select id="journalTagFilter">
+                <option value="all">Todas</option>
+              </select>
+            </label>
+          </div>
+
+          <ul id="journalList" class="journal-list" aria-live="polite" aria-label="Registros do Diário Psicológico"></ul>
+        </section>
+      </main>
+
+      <dialog id="journalDeleteDialog" class="journal-delete-dialog" aria-labelledby="journalDeleteDialogTitle">
+        <div class="journal-delete-dialog-content">
+          <h2 id="journalDeleteDialogTitle">Excluir registro</h2>
+          <p>Deseja realmente excluir este registro do Diário Psicológico? Esta ação não poderá ser desfeita.</p>
+          <div class="journal-delete-dialog-actions">
+            <button id="journalDeleteCancelBtn" class="secondary-btn" type="button">Cancelar</button>
+            <button id="journalDeleteConfirmBtn" class="danger-btn" type="button">Excluir</button>
+          </div>
+        </div>
+      </dialog>
+
+      <dialog id="pixelArtDialog" class="pixel-art-dialog" aria-labelledby="pixelArtDialogTitle">
+        <div class="pixel-art-editor">
+          <header class="pixel-art-header">
+            <div>
+              <p class="eyebrow">Ateliê de retratos</p>
+              <h2 id="pixelArtDialogTitle">Retrato de <span id="pixelArtCharacterName"></span></h2>
+            </div>
+            <button id="pixelArtCloseBtn" class="pixel-art-close" type="button" aria-label="Fechar editor">×</button>
+          </header>
+
+          <div class="pixel-art-toolbar">
+            <div class="pixel-art-tools" role="toolbar" aria-label="Ferramentas de desenho">
+              <button class="pixel-art-tool selected" type="button" data-pixel-tool="pencil" aria-pressed="true" aria-label="Lápis">✎ <span>Lápis</span></button>
+              <button class="pixel-art-tool" type="button" data-pixel-tool="eraser" aria-pressed="false" aria-label="Borracha">⌫ <span>Borracha</span></button>
+              <button class="pixel-art-tool" type="button" data-pixel-tool="fill" aria-pressed="false" aria-label="Balde de tinta">▨ <span>Balde</span></button>
+            </div>
+
+            <label class="pixel-art-resolution">
+              <span>Resolução</span>
+              <select id="pixelArtResolution" aria-label="Resolução do desenho">
+                <option value="16">16 × 16</option>
+                <option value="32" selected>32 × 32</option>
+                <option value="64">64 × 64</option>
+              </select>
+            </label>
+
+            <div class="pixel-art-history" role="group" aria-label="Histórico do desenho">
+              <button id="pixelArtUndoBtn" class="secondary-btn" type="button" aria-label="Desfazer" title="Desfazer" disabled>↶</button>
+              <button id="pixelArtRedoBtn" class="secondary-btn" type="button" aria-label="Refazer" title="Refazer" disabled>↷</button>
+            </div>
+
+            <div class="pixel-art-view-controls" role="group" aria-label="Visualização da tela">
+              <button id="pixelArtGridBtn" class="secondary-btn" type="button" aria-pressed="true">Grade: ligada</button>
+              <button id="pixelArtZoomOutBtn" class="secondary-btn" type="button" aria-label="Diminuir zoom">−</button>
+              <output id="pixelArtZoomValue" aria-live="polite">100%</output>
+              <button id="pixelArtZoomInBtn" class="secondary-btn" type="button" aria-label="Aumentar zoom">+</button>
+            </div>
+          </div>
+
+          <div class="pixel-art-workspace">
+            <div class="pixel-art-canvas-wrap">
+              <canvas id="pixelArtCanvas" class="pixel-art-canvas" width="32" height="32" tabindex="0" aria-label="Tela de desenho em pixel art" aria-describedby="pixelArtHelp"></canvas>
+            </div>
+
+            <aside class="pixel-art-palette-panel" aria-label="Paleta de cores">
+              <h3>Cores</h3>
+              <div id="pixelArtPalette" class="pixel-art-palette" role="group" aria-label="Cores disponíveis"></div>
+              <label class="pixel-art-custom-color">
+                <span>Cor personalizada</span>
+                <input id="pixelArtCustomColor" type="color" value="#7b3f2a" aria-label="Selecionar cor personalizada" />
+              </label>
+              <p id="pixelArtToolStatus" class="pixel-art-tool-status" aria-live="polite">Lápis · #7b3f2a</p>
+              <p id="pixelArtHelp" class="pixel-art-help">Toque ou arraste sobre a tela para desenhar.</p>
+              <button id="pixelArtClearBtn" class="secondary-btn pixel-art-clear" type="button">Limpar desenho</button>
+            </aside>
+          </div>
+
+          <footer class="pixel-art-footer">
+            <button id="pixelArtCancelBtn" class="secondary-btn" type="button">Cancelar</button>
+            <button id="pixelArtSaveBtn" class="primary-btn" type="button">Salvar desenho</button>
+          </footer>
+        </div>
+      </dialog>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
